@@ -52,10 +52,9 @@ AWS CDK로 정의된 5개 평면. 서버 환경과 클라이언트 환경을 각
 
 ```
 adaptive-rendering-research-proposal.md       연구 제안서 (전체 명세)
-adaptive-rendering-research-plan-concise.md   초기 요약본 (SSR/CSR 한정, 제안서로 대체됨)
-PLMS.txt                                      초기 아이디어 메모 (현재 미채택)
 CLAUDE.md                                     Claude Code 작업 가이드
-03_Project/                                   구현 (예정)
+03_Project/
+└── docs/benchmark-app-design.md              벤치마크 앱(SUT) 구조 설계
 ```
 
 설계 판단의 근거는 제안서에, 작업 시 지켜야 할 제약은 `CLAUDE.md`에 정리되어 있다.

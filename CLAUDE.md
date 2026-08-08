@@ -12,11 +12,10 @@ Working language is Korean. Documents, comments, and discussion are in Korean; k
 
 **Context-adaptive rendering mode selection.** Web frameworks fix the rendering mode (CSR/SSR/SSG/ISR/Streaming SSR/Islands) per route at build time. This research treats the optimal mode as a *function of runtime environment* — client device tier, network quality, and instantaneous server load — and learns a policy that picks the mode per request/session.
 
-Two planning documents define the system; read them before doing design work:
+Two documents define the system; read them before doing design work:
 
 - `adaptive-rendering-research-proposal.md` — the full spec (32KB). Formalization, ML design, AWS infrastructure, evaluation. **This is the authoritative document.**
-- `adaptive-rendering-research-plan-concise.md` — an earlier, narrower summary (SSR vs. CSR only, generic testbed). Superseded by the proposal where the two disagree.
-- `PLMS.txt` — the original, abandoned project idea (a PLMS/POVIS clone). Historical only; ignore for current work.
+- `03_Project/docs/benchmark-app-design.md` — the SUT structure derived from it: 5-mode routing, the shared-component-graph mechanism, instrumentation, and the measurement pitfalls.
 
 ## Design decisions already made
 

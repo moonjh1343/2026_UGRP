@@ -36,21 +36,23 @@
                         │
                   결정 계층(프록시) — 피처 수집 → 정책 추론 → 모드 결정
                         │
-내부 경로         /__m/ssg/content/deep-dive-01
+내부 경로         /m/ssg/content/deep-dive-01
 ```
 
+> **경로 이름 주의.** App Router는 밑줄로 시작하는 폴더(`_m`, `__m`)를 **private 폴더로 보고 라우팅에서 제외**한다. 설계 초안의 `__m/`은 동작하지 않아 `m/`으로 확정했다.
+
 ```
-app/__m/csr/content/[slug]/page.tsx        dynamic = 'force-dynamic'
-app/__m/ssr/content/[slug]/page.tsx        dynamic = 'force-dynamic'
-app/__m/stream/content/[slug]/page.tsx     dynamic = 'force-dynamic'
-app/__m/ssg/content/[slug]/page.tsx        dynamic = 'force-static', revalidate = 60
-app/__m/islands/content/[slug]/page.tsx    dynamic = 'force-dynamic'
+app/m/csr/content/[slug]/page.tsx        dynamic = 'force-dynamic'
+app/m/ssr/content/[slug]/page.tsx        dynamic = 'force-dynamic'
+app/m/stream/content/[slug]/page.tsx     dynamic = 'force-dynamic'
+app/m/ssg/content/[slug]/page.tsx        dynamic = 'force-static', revalidate = 60
+app/m/islands/content/[slug]/page.tsx    dynamic = 'force-dynamic'
 ```
 
 각 파일은 공유 렌더러에 위임하는 5줄짜리 껍데기다. 파일 수는 5모드 × 5유형 = **25개**이고, 라우트 25종은 `[slug]` 파라미터로 표현되므로 파일이 늘지 않는다.
 
 ```tsx
-// app/__m/ssg/content/[slug]/page.tsx
+// app/m/ssg/content/[slug]/page.tsx
 export const dynamic = 'force-static'
 export const revalidate = 60
 export const generateStaticParams = () => routesOf('content').map(r => ({ slug: r.key }))
@@ -110,10 +112,18 @@ components/
 ```tsx
 // components/trees/ContentTree.client.tsx — 전부 3줄
 'use client'
-export { ContentTree as default } from './ContentTree'
+import { ContentTree } from './ContentTree'
+export default ContentTree
 ```
 
 **트리 정의는 한 벌이고, 3줄짜리 심이 그것을 클라이언트 그래프로 끌어올린다.** 리프 컴포넌트는 지시어가 없으므로 양쪽에서 그대로 재사용된다.
+
+> **모드별 렌더 모듈을 분리해야 한다 — 1단계에서 확인된 함정.**
+> 모드 분기를 `renderFor(mode, type)` 하나의 공용 모듈에 두면, 그 모듈이 `ContentTree.client`를
+> 임포트하는 순간 **Islands 라우트의 클라이언트 번들에도 트리가 끌려 들어간다.** 임포트 그래프는
+> switch 문의 분기를 따라가지 않기 때문이다. 실제로 첫 구현에서 Islands의 JS 절감이 정확히
+> 0%였고, `lib/render/{csr,hydrated,stream,islands}.tsx`로 쪼갠 뒤에야 트리가 서버 그래프에 남았다.
+> 공용 모듈(`shell.tsx`)은 라우트 해석과 `M(r)` 검증만 담당하고 **트리를 임포트하지 않는다.**
 
 제약: 리프와 트리는 서버 전용 API(`fs`, DB 드라이버)를 쓸 수 없고 `async`일 수 없다. 데이터는 전부 props로 내려오므로 실제 문제는 없다.
 
@@ -216,6 +226,17 @@ export function candidateModes(route: Route): Mode[] {
 
 인스턴스 5개는 이 기준값 주위에서 **가장 지배적인 축만** ±60% 범위로 흩뿌린다. 모든 축을 동시에 흔들면 어떤 축이 결정을 갈랐는지 사후에 분리할 수 없다.
 
+### 비용 노브는 데이터 무게만 바꾼다 — 3단계에서 해결할 것
+
+1단계 실측에서 드러난 문제다. 현재 노브(`nodeCount`, `payloadKB`, `interactiveCount`)는 전부 **런타임 데이터**의 크기를 조절할 뿐 **컴포넌트 코드**의 크기를 바꾸지 않는다.
+
+- `nodeCount`를 올리면 섹션 데이터가 늘어 DOM 노드는 많아지지만, `SectionBlock` 코드 크기는 그대로다.
+- `interactiveCount`는 위젯 **인스턴스** 수만 바꾼다. `WidgetSlot`이 세 위젯 타입을 정적으로 임포트하므로 번들에는 항상 셋 다 들어간다.
+
+결과적으로 라우트가 달라도 JS 번들 크기가 거의 같고, 제안서 §3.4의 "모드별 라우트 JS 번들 크기" 피처에 분산이 없다. Islands의 이득도 1.3KB(0.2%)에 그쳐 측정 노이즈에 묻힌다.
+
+3단계에서 유형을 확대할 때, 대시보드형·폼형은 **무거운 컴포넌트 코드**(차트 렌더러, 폼 검증 로직 등)를 실제로 임포트해야 한다. 그래야 하이드레이션 비용 축이 데이터가 아니라 코드에서 나오고, Islands가 유의미한 후보가 된다.
+
 ### 예상 우열은 가설이지 목표가 아니다
 
 측정 결과가 표와 다르면 표를 고치는 것이지 앱을 고치는 게 아니다. 다만 **25개 라우트가 전부 같은 모드를 선호한다면** 그건 앱이 축을 분리하지 못한 것이므로, 그때는 파라미터를 재조정해야 한다. 이 확인이 §12의 3단계 검증이다.
@@ -280,7 +301,7 @@ const rng = seeded(hash(route.type + route.key))   // 같은 라우트 → 항�
 ```
 
 ```tsx
-// app/__m/layout.tsx
+// app/m/layout.tsx
 <script id="__exp" type="application/json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify({ cid, mode, cell, route }) }} />
 ```
@@ -378,9 +399,8 @@ missRate(x, ssg) = 1 / max(1, rps_r × T)
 03_Project/
 ├── apps/benchmark/                    SUT — Next.js 앱
 │   ├── app/
-│   │   ├── __m/                       모드별 진입점 (5모드 × 5유형 = 25 파일, 각 5줄)
-│   │   │   ├── layout.tsx             상관 ID 주입, 비콘 부트스트랩
-│   │   │   ├── csr/{content,list,dashboard,form,personalized}/[key]/page.tsx
+│   │   ├── m/                         모드별 진입점 (5모드 × 5유형 = 25 파일, 각 5줄)
+│   │   │   ├── csr/{content,list,dashboard,form,personalized}/[slug]/page.tsx
 │   │   │   ├── ssr/…  stream/…  ssg/…  islands/…
 │   │   └── api/
 │   │       ├── data/[type]/[key]/route.ts     CSR 전송로
@@ -467,9 +487,12 @@ npm run analyze:routes    →  lib/routes.generated.json
 4. **콜드/웜 브라우저 고정.** 반복마다 프로필 초기화.
 5. **모드 실행 순서 무작위화.** 5개 모드를 무작위 순서로 실행한다. 순차 실행하면 인프라 드리프트가 특정 모드에 체계적으로 몰린다.
 6. **부하 셀과 측정 셀 분리.** k6는 실제 렌더를 하지 않으므로 k6 값으로 Web Vitals를 계산하면 안 된다.
-7. **모드 간 번들 동일성 검증.** CSR·SSR·Streaming·SSG는 같은 클라이언트 번들을 써야 한다. 경로가 다르면 Next.js가 다른 청크를 낼 수 있으므로 빌드 산출물을 비교 검증한다. Islands만 달라야 정상이다.
-8. **버전 기록.** Chrome·Playwright·Node·Next.js 버전을 모든 실험 레코드에 넣는다. 브라우저 업데이트만으로 성능 특성이 바뀐다.
-9. **Streaming의 측정 종료 시점.** 스트리밍은 응답이 여러 청크로 나뉘므로 "언로드 시점 수집"이 아니라 마지막 청크 도착 후 안정화까지 기다려야 LCP가 확정된다.
+7. **모드 간 번들 동일성 검증.** **SSR·Streaming·SSG** 세 모드는 같은 청크 집합을 써야 한다 — 셋 다 트리를 서버 렌더 후 전체 하이드레이션하므로 번들이 다르면 그 차이가 비교에 섞인다. CSR은 데이터 페처와 스켈레톤이 추가로 필요하므로 더 큰 것이 **정상**이고, 그 차이 자체가 CSR의 실제 비용이다. Islands는 트리가 빠져 더 작아야 한다. (`npm run report:bundles`)
+8. **번들 크기가 아니라 그래프 내용으로 검증하라.** React·Next 런타임이 ~550KB를 차지해 앱 코드 차이가 총량에 묻힌다. 1단계 실측에서 Islands의 절감은 1.3KB(0.2%)에 불과했지만, 마커 문자열로 확인하니 트리와 리프는 실제로 클라이언트 그래프에서 빠져 있었다. 총량만 보면 기법이 실패한 것으로 오판한다. (`npm run inspect:graph`)
+9. **DOM 비교 시 속성 순서를 정규화하라.** `innerHTML`은 속성의 **삽입 순서**를 보존하는데, 서버가 파싱한 HTML과 클라이언트가 `createElement`로 만든 요소는 그 순서가 다르다(SSR `<img src=… width=…>` vs CSR `<img width=… src=…>`). DOM 명세상 속성은 순서 없는 맵이므로 실제 차이가 아니다. 속성을 정렬한 정규형으로 비교해야 한다.
+10. **버전 기록.** Chrome·Playwright·Node·Next.js 버전을 모든 실험 레코드에 넣는다. 브라우저 업데이트만으로 성능 특성이 바뀐다.
+11. **Streaming의 측정 종료 시점.** 스트리밍은 응답이 여러 청크로 나뉘므로 "언로드 시점 수집"이 아니라 마지막 청크 도착 후 안정화까지 기다려야 LCP가 확정된다.
+12. **세그먼트 설정은 리터럴이어야 한다.** Next.js는 `dynamic`·`revalidate`를 정적 분석하므로 `REVALIDATE_MS / 1000` 같은 계산식은 빌드를 깨뜨린다. 따라서 `revalidate` 값이 `lib/routes.ts`와 이중 관리되며, 어긋나면 SSG 후보 판정과 `missRate`의 `T`가 달라진다. 페이지 모듈에 단언을 넣어 드리프트를 빌드 시점에 잡는다.
 
 ---
 

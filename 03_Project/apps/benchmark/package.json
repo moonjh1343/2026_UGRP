@@ -1,0 +1,28 @@
+{
+  "name": "@ugrp/benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "description": "적응형 렌더링 연구 SUT — 5개 렌더링 모드를 단일 컴포넌트 정의로 제공",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "check:dom": "node scripts/check-dom-equivalence.mjs",
+    "check:determinism": "node scripts/check-determinism.mjs",
+    "report:bundles": "node scripts/report-bundles.mjs",
+    "inspect:graph": "node scripts/inspect-graph.mjs"
+  },
+  "dependencies": {
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.4",
+    "playwright": "1.57.0",
+    "typescript": "5.9.3"
+  }
+}

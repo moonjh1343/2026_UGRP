@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Skeleton } from '@/components/shell/Skeleton'
 import ContentTreeClient from '@/components/trees/ContentTree.client'
 import { getData } from '@/lib/data'
+import { recordRender } from '@/lib/instrument/record'
 import type { Route, RouteType } from '@/lib/routes'
 import { Root, resolveForRender, type PageProps } from './shell'
 
@@ -23,7 +24,13 @@ export function renderStream(type: RouteType) {
   }
 }
 
+/**
+ * Suspense 안에서 렌더되므로 CPU 계측도 여기서 한다.
+ * 셸 flush 시점이 아니라 **데이터가 준비되어 트리를 만드는 구간**이 실제 렌더 비용이다.
+ */
 async function StreamedTree({ route }: { route: Route }) {
-  const data = await getData(route)
-  return <ContentTreeClient data={data} />
+  return recordRender('stream', route, async () => {
+    const data = await getData(route)
+    return <ContentTreeClient data={data} />
+  })
 }

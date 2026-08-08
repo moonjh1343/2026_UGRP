@@ -1,5 +1,6 @@
 import ContentTreeClient from '@/components/trees/ContentTree.client'
 import { getData } from '@/lib/data'
+import { recordRender } from '@/lib/instrument/record'
 import type { RouteType } from '@/lib/routes'
 import { Root, resolveForRender, type PageProps } from './shell'
 
@@ -12,11 +13,13 @@ import { Root, resolveForRender, type PageProps } from './shell'
 export function renderHydrated(mode: 'ssr' | 'ssg', type: RouteType) {
   return async function Page({ params }: PageProps) {
     const { route } = await resolveForRender(mode, type, params)
-    const data = await getData(route)
-    return (
-      <Root mode={mode}>
-        <ContentTreeClient data={data} />
-      </Root>
-    )
+    return recordRender(mode, route, async () => {
+      const data = await getData(route)
+      return (
+        <Root mode={mode}>
+          <ContentTreeClient data={data} />
+        </Root>
+      )
+    })
   }
 }

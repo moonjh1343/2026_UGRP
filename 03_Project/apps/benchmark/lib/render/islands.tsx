@@ -1,5 +1,6 @@
 import { ContentTree } from '@/components/trees/ContentTree'
 import { getData } from '@/lib/data'
+import { recordRender } from '@/lib/instrument/record'
 import type { RouteType } from '@/lib/routes'
 import { Root, resolveForRender, type PageProps } from './shell'
 
@@ -15,11 +16,13 @@ import { Root, resolveForRender, type PageProps } from './shell'
 export function renderIslands(type: RouteType) {
   return async function Page({ params }: PageProps) {
     const { route } = await resolveForRender('islands', type, params)
-    const data = await getData(route)
-    return (
-      <Root mode="islands">
-        <ContentTree data={data} />
-      </Root>
-    )
+    return recordRender('islands', route, async () => {
+      const data = await getData(route)
+      return (
+        <Root mode="islands">
+          <ContentTree data={data} />
+        </Root>
+      )
+    })
   }
 }

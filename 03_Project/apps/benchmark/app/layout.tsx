@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { Beacon } from '@/components/instrument/Beacon'
+import { HydrationWatch } from '@/components/instrument/HydrationWatch'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -7,16 +9,24 @@ export const metadata: Metadata = {
 }
 
 /**
- * 1단계에서는 동적 API(headers/cookies)를 쓰지 않는다.
+ * 레이아웃은 동적 API(headers/cookies)를 **쓰지 않는다.**
  * 하나라도 쓰면 SSG 경로가 강제로 동적 렌더가 되어 모드 구분이 무너진다.
  *
- * 상관 ID 주입은 2단계에서 추가하되, SSG는 요청 전에 렌더되므로
- * HTML에 요청별 cid를 심을 수 없다 — 엣지에서 주입하는 방식이 필요하다.
+ * 상관 ID는 HTML에 심지 않고 Server-Timing 헤더로 전달한다. SSG는 요청 전에
+ * 렌더되어 본문에 요청별 값을 넣을 수 없기 때문이다(components/instrument/Beacon.tsx).
+ *
+ * Beacon·HydrationWatch는 클라이언트 컴포넌트지만 동적 API를 쓰지 않으므로
+ * 정적 생성을 깨지 않는다. 둘 다 #app-root 바깥에 있어 DOM 동등성 검증에도
+ * 영향을 주지 않는다.
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <HydrationWatch />
+        {children}
+        <Beacon />
+      </body>
     </html>
   )
 }

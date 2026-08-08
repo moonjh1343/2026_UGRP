@@ -17,7 +17,18 @@ export function ClientRoot({ type, routeKey }: { type: string; routeKey: string 
 
   useEffect(() => {
     let alive = true
-    fetch(`/api/data/${type}/${routeKey}`)
+    /*
+     * 페이지의 상관 ID를 데이터 요청에 전파한다.
+     *
+     * CSR의 서버 비용은 셸 렌더 + 이 API 호출로 나뉘는데, API 요청은 별도 요청이라
+     * 미들웨어에서 **새 cid**를 받는다. 전파하지 않으면 한 페이지뷰의 서버 비용이
+     * 두 cid로 흩어져 조인이 끊긴다.
+     */
+    const cid = readCorrelationId()
+
+    fetch(`/api/data/${type}/${routeKey}`, {
+      headers: cid ? { 'x-correlation-id': cid } : undefined,
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`데이터 요청 실패: ${r.status}`)
         return r.json()
@@ -35,4 +46,11 @@ export function ClientRoot({ type, routeKey }: { type: string; routeKey: string 
 
   if (!data) return <Skeleton />
   return <ContentTree data={data} />
+}
+
+function readCorrelationId(): string | undefined {
+  const nav = performance.getEntriesByType('navigation')[0] as
+    | PerformanceNavigationTiming
+    | undefined
+  return nav?.serverTiming?.find((e) => e.name === 'cid')?.description
 }

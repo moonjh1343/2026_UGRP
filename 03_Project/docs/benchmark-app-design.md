@@ -292,21 +292,32 @@ const rng = seeded(hash(route.type + route.key))   // 같은 라우트 → 항�
 렌더 결정은 결정 계층에서, 성능 측정은 브라우저에서 일어난다. 이 둘을 잇지 못하면 데이터셋이 통째로 쓸모없어진다.
 
 ```
-결정 계층이 cid 생성 + 피처 스냅샷 기록
-  → 내부 경로로 재작성하며 헤더 전달
-  → 앱이 서버 측 레코드(모드, CPU 시간, 캐시 상태)를 cid로 기록
-  → 앱이 HTML <head> 최상단에 cid 인라인 주입
-  → 클라이언트 비콘이 web-vitals와 함께 cid로 전송
+결정 계층(미들웨어)이 cid 생성 + 피처 스냅샷 기록
+  → 내부 경로로 재작성하며 요청 헤더로 전달
+  → 앱이 서버 측 레코드(모드, CPU 시간)를 cid로 기록
+  → 응답에 Server-Timing 헤더로 cid 부착
+  → 클라이언트 비콘이 PerformanceServerTiming에서 cid를 읽어 web-vitals와 함께 전송
   → 데이터 레이크에서 cid로 조인
 ```
 
-```tsx
-// app/m/layout.tsx
-<script id="__exp" type="application/json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify({ cid, mode, cell, route }) }} />
+#### HTML 인라인 주입이 아니라 Server-Timing 헤더를 쓴다
+
+초안은 cid를 `<head>`에 `<script type="application/json">`으로 심는 방식이었다. **SSG·ISR에서 성립하지 않는다** — 페이지가 요청 **전에** 렌더되므로 본문에 요청별 값을 넣을 수 없다.
+
+응답 헤더는 캐시된 본문에도 요청마다 새로 붙고, 표준 API로 브라우저 JS에서 읽힌다.
+
+```ts
+const nav = performance.getEntriesByType('navigation')[0]
+const cid = nav.serverTiming.find((e) => e.name === 'cid')?.description
 ```
 
-`<head>` 최상단이어야 한다. 문서 하단에 두면 LCP 이전에 발생한 비콘이 cid를 못 읽는 경우가 생긴다. **Streaming SSR에서 특히 중요하다** — 첫 청크에 들어가지 않으면 셸만 받은 시점의 측정이 고아가 된다.
+이 방식이 5개 모드 전부에서 균일하게 동작한다(1단계 환경에서 SSG 캐시 히트 포함 검증). 부수 효과로 HTML을 건드리지 않으므로 모드 간 DOM 동등성 검증에도 영향이 없다.
+
+> **응답 헤더를 서버 컴포넌트에서 설정할 수 없다.** 따라서 초안의 `x-server-cpu-us`는 구현 불가다. 렌더 비용은 헤더가 아니라 **레코드 스트림으로 직접** 보낸다. 클라이언트는 이 값을 알 필요가 없고 조인은 데이터 레이크에서 일어나므로 실제 손실은 없다.
+
+#### CSR은 상관 ID를 데이터 요청에 전파해야 한다
+
+CSR의 서버 비용은 셸 렌더와 `/api/data` 호출로 나뉜다. API 요청은 별개 요청이라 미들웨어에서 **새 cid를 받는다.** 전파하지 않으면 한 페이지뷰의 서버 비용이 두 cid로 흩어져 조인이 끊긴다. 클라이언트가 페이지 cid를 헤더로 실어 보내고, 미들웨어는 기존 cid가 있으면 존중한다.
 
 ### 랩 지표와 필드 지표
 
@@ -330,14 +341,19 @@ const html = await render()
 const used = process.cpuUsage(t0)     // µs 델타
 ```
 
-**이 값은 배경 부하가 있으면 오염된다.** `process.cpuUsage()`는 프로세스 전체 값이고 k6 부하가 같은 프로세스에서 동시 처리되므로 델타에 남의 작업이 섞인다. 부하가 높을수록 오차가 커진다.
+**문제 1 — 해상도.** `process.cpuUsage()`의 정밀도는 플랫폼 타이머에 묶여 있다. Windows에서는 15.625ms 단위로 양자화되어 **수 ms짜리 렌더가 전부 0으로 잡힌다**(2단계 실측: 렌더 wall 1.4~5.6ms, cpuUs는 0 또는 16000). Linux는 `getrusage` 기반이라 훨씬 정밀하지만, 밀리초 미만 렌더는 여전히 노이즈 바닥에 가깝다.
+
+따라서 **per-request CPU 값은 진단용일 뿐 지표가 아니다.** `C_render(m)`은 N회 반복의 총 CPU를 N으로 나눠 구한다. 제안서 §5.2가 셀당 30회 반복을 규정하는 것과 같은 이유다. 2단계 실측에서 N=60은 순서가 뒤집힐 만큼 불안정했고 N=300에서야 정합적인 값이 나왔다(SSR 1923µs ≈ Streaming 1933µs — 같은 렌더 경로라는 기대와 일치).
+
+**문제 2 — 오염.** `process.cpuUsage()`는 프로세스 전체 값이고 k6 부하가 같은 프로세스에서 동시 처리되므로 델타에 남의 작업이 섞인다. 부하가 높을수록 오차가 커진다.
 
 두 지표를 함께 기록하고 용도를 나눈다.
 
 | 지표 | 측정법 | 용도 |
 |---|---|---|
-| 순수 렌더 CPU | Idle 셀에서만 per-request 델타 | 모드별 고유 비용 비교 |
+| `C_render(m)` | Idle 셀에서 N회 반복의 총 CPU ÷ N | 모드별 고유 비용 (§3.1.2) |
 | 실효 CPU/요청 | 부하 구간의 총 CPU ÷ 처리 요청 수 | 목적함수의 자원 항 |
+| per-request wall | 렌더 구간 벽시계 시간 | 진단·이상치 탐지 |
 
 이벤트 루프 지연은 `perf_hooks.monitorEventLoopDelay()`로 상시 수집한다. 프로세스 단위 지표라 오염 문제가 없고, "렌더 큐 지연" 피처의 실체가 된다.
 
@@ -492,7 +508,9 @@ npm run analyze:routes    →  lib/routes.generated.json
 9. **DOM 비교 시 속성 순서를 정규화하라.** `innerHTML`은 속성의 **삽입 순서**를 보존하는데, 서버가 파싱한 HTML과 클라이언트가 `createElement`로 만든 요소는 그 순서가 다르다(SSR `<img src=… width=…>` vs CSR `<img width=… src=…>`). DOM 명세상 속성은 순서 없는 맵이므로 실제 차이가 아니다. 속성을 정렬한 정규형으로 비교해야 한다.
 10. **버전 기록.** Chrome·Playwright·Node·Next.js 버전을 모든 실험 레코드에 넣는다. 브라우저 업데이트만으로 성능 특성이 바뀐다.
 11. **Streaming의 측정 종료 시점.** 스트리밍은 응답이 여러 청크로 나뉘므로 "언로드 시점 수집"이 아니라 마지막 청크 도착 후 안정화까지 기다려야 LCP가 확정된다.
-12. **세그먼트 설정은 리터럴이어야 한다.** Next.js는 `dynamic`·`revalidate`를 정적 분석하므로 `REVALIDATE_MS / 1000` 같은 계산식은 빌드를 깨뜨린다. 따라서 `revalidate` 값이 `lib/routes.ts`와 이중 관리되며, 어긋나면 SSG 후보 판정과 `missRate`의 `T`가 달라진다. 페이지 모듈에 단언을 넣어 드리프트를 빌드 시점에 잡는다.
+12. **밑줄로 시작하는 폴더는 라우팅에서 빠진다.** `app/__m/`뿐 아니라 `app/api/_internal/`도 마찬가지다 — 빌드는 성공하지만 라우트가 등록되지 않아 404가 난다. 빌드 출력의 라우트 목록에서 실제 등록 여부를 확인해야 조용히 넘어가지 않는다.
+13. **per-request CPU를 지표로 쓰지 말 것.** 플랫폼 타이머 양자화로 0이 나온다(§7). `C_render`는 반복 집계로만 구한다.
+14. **세그먼트 설정은 리터럴이어야 한다.** Next.js는 `dynamic`·`revalidate`를 정적 분석하므로 `REVALIDATE_MS / 1000` 같은 계산식은 빌드를 깨뜨린다. 따라서 `revalidate` 값이 `lib/routes.ts`와 이중 관리되며, 어긋나면 SSG 후보 판정과 `missRate`의 `T`가 달라진다. 페이지 모듈에 단언을 넣어 드리프트를 빌드 시점에 잡는다.
 
 ---
 

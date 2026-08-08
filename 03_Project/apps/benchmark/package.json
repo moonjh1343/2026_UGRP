@@ -11,12 +11,15 @@
     "check:dom": "node scripts/check-dom-equivalence.mjs",
     "check:determinism": "node scripts/check-determinism.mjs",
     "report:bundles": "node scripts/report-bundles.mjs",
-    "inspect:graph": "node scripts/inspect-graph.mjs"
+    "inspect:graph": "node scripts/inspect-graph.mjs",
+    "check:join": "node scripts/check-join.mjs",
+    "measure:render": "node scripts/measure-render-cost.mjs"
   },
   "dependencies": {
     "next": "16.3.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "web-vitals": "6.1.0"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

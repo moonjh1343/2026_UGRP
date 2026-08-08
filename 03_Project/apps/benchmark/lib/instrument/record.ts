@@ -26,10 +26,17 @@ export async function recordRender<T>(
   // 요청별 cid가 없는 것이 정상이며, 이 레코드는 "재검증 시점 렌더"를 뜻한다.
   let cid: string | null = null
   let sid: string | null = null
+  let policy: string | null = null
+  let decisionReason: string | null = null
+  let policyUs: number | null = null
   if (mode !== 'ssg') {
     const h = await headers()
     cid = h.get(HEADER.correlationId)
     sid = h.get(HEADER.sessionId)
+    policy = h.get(HEADER.policy)
+    decisionReason = h.get(HEADER.decisionReason)
+    const us = h.get(HEADER.policyUs)
+    policyUs = us === null ? null : Number(us)
   }
 
   const cpu0 = process.cpuUsage()
@@ -50,6 +57,9 @@ export async function recordRender<T>(
       routeKey: route.key,
       cpuUs: cpu.user + cpu.system,
       wallMs: performance.now() - t0,
+      policy,
+      decisionReason,
+      policyUs,
       ts: Date.now(),
     })
   }

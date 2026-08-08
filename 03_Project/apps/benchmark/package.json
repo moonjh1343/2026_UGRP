@@ -14,7 +14,9 @@
     "inspect:graph": "node scripts/inspect-graph.mjs",
     "check:join": "node scripts/check-join.mjs",
     "measure:render": "node scripts/measure-render-cost.mjs",
-    "check:divergence": "node scripts/check-type-divergence.mjs"
+    "check:divergence": "node scripts/check-type-divergence.mjs",
+    "analyze:routes": "node scripts/analyze-routes.mjs",
+    "check:policy": "node scripts/check-policy.mjs"
   },
   "dependencies": {
     "next": "16.3.0",

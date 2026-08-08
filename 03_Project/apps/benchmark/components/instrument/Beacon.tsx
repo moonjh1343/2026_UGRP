@@ -107,6 +107,8 @@ export function Beacon() {
         hydrationErrors: readHydrationErrors(),
       }
 
+      writeSessionProfile(metrics.LCP, tbt)
+
       navigator.sendBeacon('/api/beacon', new Blob([JSON.stringify(payload)], {
         type: 'application/json',
       }))
@@ -143,6 +145,33 @@ function readContext(): Ctx {
     else if (e.name === 'route') ctx.route = e.description
   }
   return ctx
+}
+
+/**
+ * 세션 프로파일 쿠키 — 콜드 스타트 대응 (제안서 §3.4, 설계 문서 §7).
+ *
+ * 최초 요청에는 기기 정밀 피처가 없다. deviceMemory·hardwareConcurrency는
+ * Client Hints로 다 오지 않고(hardwareConcurrency는 대응 힌트가 아예 없다),
+ * 이전 페이지뷰의 실측 LCP·TBT는 어떤 헤더로도 오지 않는다. 브라우저가 아는 것을
+ * 브라우저가 적어 보내는 것이 유일한 경로다.
+ *
+ * 결정 계층은 이 값을 다음 요청부터 피처로 쓴다. 즉 **첫 페이지뷰는 항상
+ * 콜드 스타트**이고, 그 사실 자체가 실험에서 통제해야 할 조건이다.
+ */
+function writeSessionProfile(lcp: number | undefined, tbt: number) {
+  try {
+    const nav = navigator as Navigator & { deviceMemory?: number }
+    const profile = {
+      lcp: typeof lcp === 'number' ? Math.round(lcp) : undefined,
+      tbt: Math.round(tbt),
+      dm: nav.deviceMemory,
+      hc: navigator.hardwareConcurrency,
+    }
+    const value = encodeURIComponent(btoa(JSON.stringify(profile)))
+    document.cookie = `__prof=${value}; path=/; max-age=1800; samesite=lax`
+  } catch {
+    // 쿠키를 못 쓰면 콜드 스타트가 지속될 뿐, 결정은 계속 가능하다
+  }
 }
 
 /** 하이드레이션 오류율은 서킷 브레이커의 가드레일 지표다(제안서 §3.5) */

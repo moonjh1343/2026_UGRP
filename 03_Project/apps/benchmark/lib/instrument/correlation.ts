@@ -20,12 +20,39 @@ export const HEADER = {
   cacheStatus: 'x-cache-status',
   /** Next.js가 ISR 라우트에 붙이는 캐시 판정 (HIT/MISS/STALE) */
   nextCache: 'x-nextjs-cache',
+
+  // --- 4단계: 결정 계층 ---
+  /** 적용할 정책 이름. 워커가 요청마다 지정해 실험군을 가른다 */
+  policy: 'x-policy',
+  /** 모드 강제 지정 — factorial 수집에서 정책을 우회한다 */
+  forceMode: 'x-render-mode',
+  /** 결정 사유 (policy|forced|single|bot|circuit|infeasible|margin|session-cap) */
+  decisionReason: 'x-decision-reason',
+  /** 1·2위 예측 차 — τ와 비교된 값 */
+  decisionMargin: 'x-decision-margin',
+  /** 추론 시간(µs). 4단계 합격 기준 < 2000 */
+  policyUs: 'x-policy-us',
+
+  /*
+   * 조건 주입 — 측정 워커가 **실제로 건 조건**을 알려준다.
+   *
+   * CDP의 Emulation/Network 스로틀링은 navigator.connection과 Client Hints를
+   * 바꾸지 않는다. 워커가 4배 CPU 스로틀·3G를 걸어도 서버에는 4g·고사양으로 보인다.
+   * 이걸 그대로 두면 랩 데이터의 기기·네트워크 피처가 전부 상수가 되어
+   * 모델이 배우려는 축 자체가 사라진다.
+   */
+  cellDeviceTier: 'x-cell-device-tier',
+  cellEffectiveType: 'x-cell-effective-type',
+  cellRttMs: 'x-cell-rtt-ms',
+  cellDownlink: 'x-cell-downlink',
 } as const
 
 export const COOKIE = {
   sessionId: '__sid',
   /** 세션 프로파일 — 콜드 스타트 이후 정밀 피처 (제안서 §3.4) */
   profile: '__prof',
+  /** 세션·라우트별 확정 모드와 전환 횟수 — 전환 상한 강제 (제안서 §3.5) */
+  decision: '__dec',
 } as const
 
 /**
@@ -43,6 +70,8 @@ export const TIMING = {
   route: 'route',
   cache: 'cache',
   render: 'render',
+  /** 결정 계층 추론 시간. dur이 4단계 합격 기준(< 2ms)의 측정값이다 */
+  policy: 'policy',
 } as const
 
 /** Server-Timing 값에 쓸 수 없는 문자를 제거한다. desc는 토큰 또는 quoted-string이어야 한다. */

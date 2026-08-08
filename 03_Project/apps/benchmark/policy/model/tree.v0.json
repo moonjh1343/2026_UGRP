@@ -1,0 +1,80 @@
+{
+  "version": "v0-unfitted",
+  "distilledFrom": null,
+  "trainedOn": null,
+  "maxDepth": 5,
+  "target": "J_hat",
+  "unit": "라우트별 z-정규화된 QoE 비용 (낮을수록 좋음)",
+  "warning": "학습된 모델이 아니다. 3단계 실측(CPU 4× · 3G Fast · n=8, 단일 조건)에서 손으로 유도한 자리표시자이며, 결정 계층의 배선과 오버헤드를 검증하기 위한 것이다. 5단계 factorial 데이터로 LightGBM을 학습하고 깊이 5로 증류해 이 파일을 교체한다. 이 상태의 예측값을 연구 결과로 인용해서는 안 된다.",
+  "features": [
+    "mode",
+    "effectiveTypeIdx",
+    "deviceTier",
+    "payloadKB",
+    "fetchDelayMs",
+    "interactiveCount",
+    "cpuPct"
+  ],
+  "modeIndex": { "csr": 0, "ssr": 1, "stream": 2, "ssg": 3, "islands": 4 },
+  "root": {
+    "feature": "mode",
+    "threshold": 0.5,
+    "left": {
+      "_comment": "csr — 3단계에서 모든 유형·모든 인스턴스에서 명확한 열위였다. 저대역에서 셸→JS→API의 추가 왕복이 지배한다.",
+      "feature": "effectiveTypeIdx",
+      "threshold": 2.5,
+      "left": {
+        "feature": "payloadKB",
+        "threshold": 100,
+        "left": { "leaf": 2.6 },
+        "right": { "leaf": 3.5 }
+      },
+      "right": {
+        "feature": "deviceTier",
+        "threshold": 2.5,
+        "left": { "leaf": 1.6 },
+        "right": { "leaf": 1.1 }
+      }
+    },
+    "right": {
+      "feature": "mode",
+      "threshold": 2.5,
+      "left": {
+        "feature": "mode",
+        "threshold": 1.5,
+        "left": {
+          "_comment": "ssr — 서버 지연이 커지면 TTFB가 그대로 밀린다",
+          "feature": "fetchDelayMs",
+          "threshold": 15,
+          "left": { "leaf": 0.75 },
+          "right": { "leaf": 0.95 }
+        },
+        "right": {
+          "_comment": "stream — 셸을 먼저 흘려보내므로 서버 지연에 덜 민감하다",
+          "feature": "fetchDelayMs",
+          "threshold": 15,
+          "left": { "leaf": 0.8 },
+          "right": { "leaf": 0.78 }
+        }
+      },
+      "right": {
+        "feature": "mode",
+        "threshold": 3.5,
+        "left": {
+          "_comment": "ssg — 부하가 높을수록 이득이 커진다(요청당 렌더 비용이 거의 0)",
+          "feature": "cpuPct",
+          "threshold": 70,
+          "left": { "leaf": 0.55 },
+          "right": { "leaf": 0.5 }
+        },
+        "right": {
+          "_comment": "islands — 위젯이 많을수록 하이드레이션 절감이 커진다",
+          "feature": "interactiveCount",
+          "threshold": 12,
+          "left": { "leaf": 0.8 },
+          "right": { "leaf": 0.72 }
+        }
+      }
+    }
+  }
+}

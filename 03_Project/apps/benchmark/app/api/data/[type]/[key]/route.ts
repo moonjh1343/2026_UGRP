@@ -48,6 +48,13 @@ export async function GET(
       routeKey: route.key,
       cpuUs: cpu.user + cpu.system,
       wallMs: performance.now() - t0,
+      /*
+       * 데이터 요청은 결정을 거치지 않는다 — 모드는 이미 페이지 요청에서 정해졌고,
+       * 이 왕복은 그 결정의 **결과**다. 같은 cid의 페이지 레코드가 결정을 들고 있다.
+       */
+      policy: null,
+      decisionReason: null,
+      policyUs: null,
       ts: Date.now(),
     })
   }

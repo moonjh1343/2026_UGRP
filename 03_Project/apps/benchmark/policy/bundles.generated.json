@@ -1,0 +1,30 @@
+{
+  "note": "npm run analyze:routes 산출물. 손으로 고치지 말 것.",
+  "generatedAt": "2026-08-08T07:21:58.264Z",
+  "source": "http://127.0.0.1:3000",
+  "unit": "KB",
+  "byModeType": {
+    "csr/content": 571.23,
+    "ssr/content": 570.26,
+    "stream/content": 570.26,
+    "islands/content": 568.84,
+    "ssg/content": 570.26,
+    "csr/list": 570.47,
+    "ssr/list": 569.5,
+    "stream/list": 569.5,
+    "islands/list": 568.26,
+    "ssg/list": 569.5,
+    "csr/dashboard": 573.9,
+    "ssr/dashboard": 572.93,
+    "stream/dashboard": 572.93,
+    "islands/dashboard": 571.8,
+    "csr/form": 570.66,
+    "ssr/form": 569.69,
+    "stream/form": 569.69,
+    "islands/form": 569.23,
+    "csr/personalized": 570.52,
+    "ssr/personalized": 569.55,
+    "stream/personalized": 569.55,
+    "islands/personalized": 568.26
+  }
+}

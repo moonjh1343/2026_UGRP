@@ -20,6 +20,14 @@ export type RenderRecord = {
   /** 렌더 CPU 시간(µs). 배경 부하가 있으면 오염된다 — 설계 문서 §7 참조 */
   cpuUs: number
   wallMs: number
+  /*
+   * 결정 계층이 남긴 정보. 폴백·오버라이드 빈도를 집계해야 정책 비교를 해석할 수 있다
+   * (제안서 §7.2). SSG는 요청 전에 렌더되어 헤더를 못 읽으므로 null이다 —
+   * 그 경우 응답 헤더(x-decision-reason)가 유일한 기록이다.
+   */
+  policy: string | null
+  decisionReason: string | null
+  policyUs: number | null
   ts: number
 }
 
@@ -42,6 +50,8 @@ type Store = {
   /** 라우트별 요청 수 — 제안서 §3.1.2의 rps_r 산출용 */
   routeHits: Map<string, number[]>
   cacheStatus: { hit: number; miss: number; stale: number }
+  /** 서킷 브레이커 입력 (제안서 §3.5) */
+  responses: { total: number; err5xx: number }
 }
 
 const LIMIT = 5000
@@ -58,6 +68,7 @@ export function store(): Store {
       beacons: [],
       routeHits: new Map(),
       cacheStatus: { hit: 0, miss: 0, stale: 0 },
+      responses: { total: 0, err5xx: 0 },
     }
   }
   return globalThis.__ugrpStore
@@ -108,10 +119,35 @@ export function cacheHitRate(): number {
   return total === 0 ? 0 : hit / total
 }
 
+export function noteResponse(status: number) {
+  const s = store().responses
+  s.total++
+  if (status >= 500) s.err5xx++
+}
+
+/**
+ * 서킷 브레이커 입력 (제안서 §3.5). 결정 계층이 서버 상태 스냅샷과 **같은 왕복으로**
+ * 가져간다 — 가드레일 때문에 별도 조회를 추가하면 그 왕복이 TTFB에 얹힌다.
+ *
+ * 하이드레이션 오류율은 최근 비콘 기준이다. 비콘은 페이지를 떠날 때 도착하므로
+ * 이 지표는 구조적으로 한 페이지뷰만큼 지연된다. 급증 감지에는 충분하지만
+ * "직전 요청이 깨졌는가"에는 답하지 못한다.
+ */
+export function guardrails(): { hydrationErrorRate: number; errorRate5xx: number } {
+  const s = store()
+  const recent = s.beacons.slice(-200)
+  const broken = recent.filter((b) => b.hydrationErrors > 0).length
+  return {
+    hydrationErrorRate: recent.length === 0 ? 0 : broken / recent.length,
+    errorRate5xx: s.responses.total === 0 ? 0 : s.responses.err5xx / s.responses.total,
+  }
+}
+
 export function reset() {
   const s = store()
   s.renders.length = 0
   s.beacons.length = 0
   s.routeHits.clear()
   s.cacheStatus = { hit: 0, miss: 0, stale: 0 }
+  s.responses = { total: 0, err5xx: 0 }
 }

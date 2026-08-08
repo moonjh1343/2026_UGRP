@@ -1,6 +1,6 @@
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks'
 import os from 'node:os'
-import { cacheHitRate, routeRps } from './store'
+import { cacheHitRate, guardrails, routeRps } from './store'
 
 /**
  * 서버 상태 스냅샷. 제안서 §3.4의 서버 상태 피처를 산출한다.
@@ -58,6 +58,8 @@ export type ServerSnapshot = {
   cacheHitRate: number
   /** 라우트별 최근 60초 요청률 — 전역 rps로는 라우트별 캐시 효율을 반영 못 한다 */
   routeRps: Record<string, number>
+  /** 서킷 브레이커 입력. 결정 계층이 같은 왕복으로 가져간다(제안서 §3.5) */
+  guardrails: { hydrationErrorRate: number; errorRate5xx: number }
   cpuCount: number
   ts: number
 }
@@ -84,6 +86,7 @@ export function snapshot(): ServerSnapshot {
     eventLoopMaxMs: s.histogram.max / 1e6,
     cacheHitRate: cacheHitRate(),
     routeRps: routeRps(),
+    guardrails: guardrails(),
     cpuCount,
     ts: now,
   }

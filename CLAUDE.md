@@ -4,7 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-This is a **research repository, not yet a codebase**. `03_Project/` (the primary working directory) is empty; only `README.md` is tracked in git. Everything else is untracked planning material. There are no build, lint, or test commands yet — when the first code lands, add them to this file.
+Research repository with one implemented component: the SUT at `03_Project/apps/benchmark/` (Next.js). Everything else is planning material, most of it untracked (binaries are gitignored — see the layout section).
+
+All commands run from `03_Project/apps/benchmark/`:
+
+```bash
+npm run build && npm start     # 측정은 프로덕션 빌드로만. dev 서버는 요청 시 컴파일한다
+npm run typecheck
+```
+
+Verification scripts require a running server. Each gates one implementation stage:
+
+| 명령 | 검증 | 단계 |
+|---|---|---|
+| `npm run check:dom` | 5개 모드의 최종 DOM이 동일한가 | 1 |
+| `npm run check:join` | 서버 레코드 ↔ 클라이언트 비콘이 조인되는가 | 2 |
+| `npm run check:divergence` | 유형별 모드 우열이 서로 다른 방향인가 | 3 |
+| `npm run check:policy` | 정책 교체가 앱에 영향 없는가 / 추론 < 2ms인가 | 4 |
+| `npm run check:determinism` | 페이로드가 바이트 단위로 동일한가 | — |
+| `npm run analyze:routes` | 모드별 번들 KB 룩업 테이블 생성 (→ 재빌드) | — |
+| `npm run measure:render` | `C_render(m)` 반복 집계 | — |
+
+Stages 1–4 pass; 5 (부하·측정 워커) is not started.
+
+Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
@@ -62,6 +85,8 @@ Non-ASCII directory names — quote paths in shell commands.
 - `00_Main/`, `01_연구 계획서/` — proposal submissions (PDF/DOCX)
 - `02_참고 논문/` — reference papers on CSR/SSR performance
 - `99_기타/` — past UGRP award reports, admin documents
-- `03_Project/` — implementation target, currently empty
+- `03_Project/docs/` — design documents
+- `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
+- `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 
-Nothing but `README.md` is tracked. Before the first substantive commit, add a `.gitignore` (PDFs, DOCX, HWP, PPTX, and `99_기타/제출 문서/` contain invoices/receipts) and decide deliberately which documents belong in version control.
+`.gitignore` excludes all PDF/DOCX/PPTX/HWP/XLSX and all of `99_기타/` — that directory holds invoices and receipts. The repo is private, but keep binaries and personal documents out of it regardless.

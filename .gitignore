@@ -20,6 +20,12 @@ node_modules/
 # 별도 데이터 저장소(S3)로 올린다 — 저장소에 커밋하지 않는다.
 03_Project/workers/runs/
 
+# 학습 산출물 — 스냅샷·학습된 모델·평가 리포트는 코드가 아니라 데이터다.
+03_Project/training/data/
+03_Project/training/out/
+__pycache__/
+*.pyc
+
 # OS
 Thumbs.db
 Desktop.ini

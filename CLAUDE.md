@@ -36,6 +36,21 @@ cd 03_Project/workers && node run.mjs --name pilot     # factorial 수집 (재�
 k6 is not installed in this environment; `load/generator.mjs` is the local stand-in and reads
 the same `load/profile.json` as the k6 deployment script.
 
+Stage 6 (factorial collection) runs `run.mjs` against slices of the 10,400-cell grid; a
+run is resumable by re-invoking with the same `--name` (see `workers/README.md`). Stage 7
+(training pipeline) is a separate Python package at `03_Project/training/`:
+
+```bash
+cd 03_Project/training
+pip install -r requirements.txt
+python scripts/fetch_routes.py     # route snapshot — needs the app server up, doesn't disturb it
+python scripts/train.py --distill  # load collected runs → label → train → evaluate → distill
+```
+
+`training/ugrp_train/config.py` mirrors JS-side tables (`workers/lib/grid.mjs`'s device/network
+conditions, `policy/features.ts`'s feature vector order, `policy/model/*.json`'s mode index) —
+those copies don't auto-sync; see `training/README.md` for what breaks if they drift.
+
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
@@ -100,5 +115,7 @@ Non-ASCII directory names — quote paths in shell commands.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.
 - `03_Project/workers/` — Playwright measurement workers. `lib/grid.mjs` is the version-controlled experiment definition, not a script parameter.
 - `03_Project/workers/runs/` — collected data (gitignored).
+- `03_Project/training/` — Python training pipeline (stage 7). `ugrp_train/` is the package,
+  `scripts/` the CLI entry points. `data/` and `out/` are gitignored (generated).
 
 `.gitignore` excludes all PDF/DOCX/PPTX/HWP/XLSX and all of `99_기타/` — that directory holds invoices and receipts. The repo is private, but keep binaries and personal documents out of it regardless.

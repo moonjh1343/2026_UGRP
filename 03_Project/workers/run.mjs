@@ -141,6 +141,9 @@ const rng = makeRng(ORDER_SEED)
 let measured = 0
 let skipped = 0
 let failedReps = 0
+let consecutiveFailures = 0
+/** 연속 실패 상한 — 브라우저·서버가 죽은 채로 조용히 헛돌지 않게 막는다. */
+const FAILURE_STREAK_LIMIT = Number(arg('failure-streak-limit', 15))
 const startedAt = Date.now()
 
 for (const [level, group] of byLoad) {
@@ -176,7 +179,20 @@ for (const [level, group] of byLoad) {
       let cellFailed = 0
 
       for (let rep = -WARMUP; rep < REPS; rep++) {
-        const r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: ALLOW_STALE })
+        /*
+         * measureOnce()는 정상적인 실패(HTTP 오류, cid 없음)만 { ok:false }로 돌려주고,
+         * Playwright의 예외(페이지 타임아웃 등)는 그대로 던진다. 여기서 잡지 않으면
+         * 25시간짜리 실행이 반복 하나의 일시적 타임아웃으로 통째로 죽는다 —
+         * 실제로 3번째 셀에서 이렇게 죽었다. 체크포인트가 셀 단위라 재개해도
+         * 죽은 시점의 셀은 처음부터 다시 돈다는 것을 감안해도, 예외로 프로세스가
+         * 죽는 것 자체는 반드시 막아야 한다.
+         */
+        let r
+        try {
+          r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: ALLOW_STALE })
+        } catch (err) {
+          r = { ok: false, reason: `예외: ${err.message}`, cell, rep }
+        }
 
         if (!r.ok) {
           if (r.reason === 'stale-skipped') {
@@ -185,8 +201,19 @@ for (const [level, group] of byLoad) {
           }
           cellFailed++
           failedReps++
+          consecutiveFailures++
+          if (consecutiveFailures >= FAILURE_STREAK_LIMIT) {
+            console.error(
+              `\n연속 실패 ${consecutiveFailures}회(마지막 사유: ${r.reason}) — 브라우저나 서버가` +
+                ` 죽었을 가능성이 높다. 조용히 낭비하는 대신 중단한다.`,
+            )
+            await load.stop().catch(() => {})
+            await browser.close().catch(() => {})
+            process.exit(1)
+          }
           continue
         }
+        consecutiveFailures = 0
         if (rep < 0) continue // 워밍업은 기록하지 않는다
 
         const row = {

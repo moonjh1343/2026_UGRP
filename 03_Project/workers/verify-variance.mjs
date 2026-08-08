@@ -133,7 +133,13 @@ try {
     process.stdout.write(`  ${route.type}/${route.key}  `)
     let n = 0
     for (const { cell, rep } of plan) {
-      const r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: false })
+      // run.mjs와 같은 이유로 예외를 잡는다 — 타임아웃 한 번에 검증 전체가 죽으면 안 된다.
+      let r
+      try {
+        r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: false })
+      } catch (err) {
+        r = { ok: false, reason: `예외: ${err.message}` }
+      }
       if (!r.ok) {
         failed++
         continue

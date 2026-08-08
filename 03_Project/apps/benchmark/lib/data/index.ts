@@ -1,8 +1,12 @@
 import type { Route } from '../routes'
 import { generateContent } from './content'
+import { generateDashboard } from './dashboard'
+import { generateForm } from './form'
+import { generateList } from './list'
+import { generatePersonalized } from './personalized'
 import type { Payload } from './types'
 
-export type { ContentPayload, Payload, SectionSpec, WidgetSpec } from './types'
+export type * from './types'
 
 /**
  * 모든 렌더링 모드가 공유하는 단일 데이터 진입점.
@@ -23,8 +27,14 @@ export async function getData(route: Route): Promise<Payload> {
   switch (route.type) {
     case 'content':
       return generateContent(route)
-    default:
-      throw new Error(`아직 구현되지 않은 라우트 유형: ${route.type} (설계 문서 §12 3단계)`)
+    case 'list':
+      return generateList(route)
+    case 'dashboard':
+      return generateDashboard(route)
+    case 'form':
+      return generateForm(route)
+    case 'personalized':
+      return generatePersonalized(route)
   }
 }
 

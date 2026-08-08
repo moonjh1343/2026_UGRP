@@ -48,15 +48,47 @@ export function Beacon() {
       // longtask 미지원 브라우저 — TBT는 결측으로 남는다
     }
 
+    /*
+     * LCP 폴백 관측자.
+     *
+     * web-vitals의 onLCP는 (첫 사용자 입력 | 페이지 숨김) 중 먼저 오는 시점에 확정한다.
+     * 상호작용이 없는 페이지에서는 확정이 visibilitychange를 기다리는데, 측정 워커가
+     * 다른 URL로 이동하면 pagehide만 발화하는 경우가 있어 **flush와 경쟁**한다.
+     * 실제로 폼형에서 LCP만 결측됐다(TTFB·TBT는 정상 수집).
+     *
+     * 마지막 LCP 후보를 직접 들고 있다가, web-vitals 값이 없으면 이 값을 쓴다.
+     * getEntriesByType('largest-contentful-paint')는 항상 비어 있으므로
+     * buffered PerformanceObserver가 유일한 경로다.
+     */
+    let lcpFallback = NaN
+    let lcpObserver: PerformanceObserver | undefined
+    try {
+      lcpObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries()
+        const last = entries[entries.length - 1]
+        if (last) lcpFallback = last.startTime
+      })
+      lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true })
+    } catch {
+      // 미지원 브라우저 — web-vitals 값에만 의존한다
+    }
+
     let sent = false
     const flush = () => {
       if (sent) return
       sent = true
       observer?.disconnect()
+      lcpObserver?.disconnect()
 
       const nav = performance.getEntriesByType('navigation')[0] as
         | PerformanceNavigationTiming
         | undefined
+
+      // web-vitals가 확정하지 못했으면 폴백 관측자의 마지막 후보를 쓴다
+      if (typeof metrics.LCP !== 'number' && Number.isFinite(lcpFallback)) {
+        metrics.LCP = lcpFallback
+        attribution.LCP = { source: 'fallback-observer' }
+      }
 
       const payload = {
         cid: ctx.cid,

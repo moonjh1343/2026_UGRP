@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { MODES } from '@/lib/modes'
-import { ROUTES, candidateModes, totalCandidateCells } from '@/lib/routes'
+import { ROUTE_TYPES, ROUTES, candidateModes, routesOf, totalCandidateCells } from '@/lib/routes'
 
 /** 수동 확인용 인덱스. 측정 경로가 아니다. */
 export default function Index() {
@@ -13,28 +13,29 @@ export default function Index() {
         <span>Σ|M(r)| = {totalCandidateCells()}</span>
       </p>
 
-      {ROUTES.map((r) => {
-        const allowed = candidateModes(r)
+      {ROUTE_TYPES.map((type) => {
+        const routes = routesOf(type)
+        const excluded = MODES.filter((m) => !candidateModes(routes[0]).includes(m))
         return (
-          <section key={r.key} className="section">
+          <section key={type} className="section">
             <h2>
-              {r.key}{' '}
-              <small>
-                nodeCount {r.nodeCount} · payload {r.payloadKB}KB · widgets {r.interactiveCount}
-              </small>
+              {type} <small>{routes.length}개 인스턴스</small>
             </h2>
+            {excluded.length > 0 ? (
+              <p className="help">M(r) 배제: {excluded.join(', ')}</p>
+            ) : null}
             <ul className="mode-index">
-              {MODES.map((m) => (
-                <li key={m}>
-                  {allowed.includes(m) ? (
-                    <Link href={`/m/${m}/content/${r.key}`}>
-                      /m/{m}/content/{r.key}
-                    </Link>
-                  ) : (
-                    <span style={{ color: 'var(--muted)' }}>
-                      /m/{m}/content/{r.key} — M(r) 배제
+              {routes.map((r) => (
+                <li key={r.key}>
+                  <code>{r.key}</code>{' '}
+                  {candidateModes(r).map((m) => (
+                    <span key={m}>
+                      <Link href={`/m/${m}/${type}/${r.key}`}>{m}</Link>{' '}
                     </span>
-                  )}
+                  ))}
+                  <small className="help">
+                    nodes {r.nodeCount} · widgets {r.interactiveCount} · {r.payloadKB}KB
+                  </small>
                 </li>
               ))}
             </ul>

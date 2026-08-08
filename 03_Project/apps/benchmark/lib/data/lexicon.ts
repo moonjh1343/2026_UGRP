@@ -16,3 +16,30 @@ export const HEADINGS = [
 ] as const
 
 export const AUTHORS = ['김연구', '이측정', '박실험', '최분석', '정검증'] as const
+
+export const NOUNS = [
+  '보고서', '대시보드', '리포트', '색인', '카탈로그', '워크로드', '파이프라인',
+  '스냅샷', '체크포인트', '롤아웃', '샤드', '큐', '워커', '노드', '클러스터',
+] as const
+
+export const ADJECTIVES = [
+  '경량', '고성능', '분산', '적응형', '실시간', '점진적', '정적', '동적',
+] as const
+
+export const TAGS = ['성능', '측정', '캐시', '네트워크', '렌더링', '자원', '분석'] as const
+
+export const METRIC_LABELS = [
+  '요청률', '응답 지연', 'CPU 사용률', '메모리', '캐시 적중률', '오류율',
+  '큐 깊이', '동시 요청', '전송 바이트', '렌더 시간',
+] as const
+
+export const UNITS = ['rps', 'ms', '%', 'MB', 'KB', '건'] as const
+
+export const FIELD_LABELS = [
+  '이름', '이메일', '전화번호', '소속', '직책', '우편번호', '주소',
+  '수량', '예산', '비고', '담당자', '부서', '프로젝트명', '기간',
+] as const
+
+export const ACTIVITY_LABELS = [
+  '문서 열람', '보고서 다운로드', '대시보드 조회', '설정 변경', '댓글 작성',
+] as const

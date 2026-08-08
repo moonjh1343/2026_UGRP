@@ -39,32 +39,80 @@ export type Route = {
   hardPinned: boolean
 }
 
-const CONTENT_DEFAULTS = {
-  type: 'content' as const,
-  nodeCount: 2500,
-  interactiveCount: 2,
-  payloadKB: 120,
-  fetchDepth: 1,
-  fetchDelayMs: 0,
-  personalizedRatio: 0,
-  freshnessMs: 3_600_000,
-  seoWeight: 1,
-  hardPinned: false,
+type TypeDefaults = Omit<Route, 'key'>
+
+/**
+ * 유형별 기준값. 다섯 유형은 **서로 다른 축에서 무겁도록** 배정한다.
+ * 이래야 모드 우열이 유형별로 갈리고 결정 경계가 생긴다(설계 문서 §5).
+ */
+const DEFAULTS: Record<RouteType, TypeDefaults> = {
+  // 전송 바이트 지배 · SEO 필수 · SSG 가능
+  content: {
+    type: 'content', nodeCount: 2500, interactiveCount: 2, payloadKB: 120,
+    fetchDepth: 1, fetchDelayMs: 0, personalizedRatio: 0,
+    freshnessMs: 3_600_000, seoWeight: 1, hardPinned: false,
+  },
+  // DOM 노드 수 지배 · 부분 개인화(θ_p 아래) · SSG 가능
+  list: {
+    type: 'list', nodeCount: 5000, interactiveCount: 6, payloadKB: 150,
+    fetchDepth: 1, fetchDelayMs: 0, personalizedRatio: 0.1,
+    freshnessMs: 600_000, seoWeight: 0.7, hardPinned: false,
+  },
+  // 하이드레이션 CPU 지배 · SEO 무관 · SSG 불가
+  dashboard: {
+    type: 'dashboard', nodeCount: 4000, interactiveCount: 24, payloadKB: 60,
+    fetchDepth: 3, fetchDelayMs: 20, personalizedRatio: 0.8,
+    freshnessMs: 10_000, seoWeight: 0, hardPinned: false,
+  },
+  // 인터랙션 준비(INP) 지배 · DOM은 작음 · SSG 불가
+  form: {
+    type: 'form', nodeCount: 1200, interactiveCount: 18, payloadKB: 30,
+    fetchDepth: 1, fetchDelayMs: 0, personalizedRatio: 0.4,
+    freshnessMs: 30_000, seoWeight: 0.2, hardPinned: false,
+  },
+  // 캐시 불가 + 서버 부하 민감 · SSG 불가
+  personalized: {
+    type: 'personalized', nodeCount: 3000, interactiveCount: 10, payloadKB: 90,
+    fetchDepth: 2, fetchDelayMs: 10, personalizedRatio: 1.0,
+    freshnessMs: 0, seoWeight: 0, hardPinned: false,
+  },
 }
 
 /**
- * 1단계에서는 콘텐츠형 5개 인스턴스만 정의한다(설계 문서 §12).
- * 인스턴스는 **지배적인 축만** 흩뿌린다 — 모든 축을 동시에 흔들면
- * 어떤 축이 결정을 갈랐는지 사후에 분리할 수 없다.
- * 콘텐츠형의 지배 축은 전송 바이트이므로 payloadKB를 ±60% 범위로 변화시킨다.
+ * 인스턴스별로 **지배 축만** ±60% 범위로 흩뿌린다.
+ * 모든 축을 동시에 흔들면 어떤 축이 결정을 갈랐는지 사후에 분리할 수 없다.
  */
-export const ROUTES: Route[] = [
-  { ...CONTENT_DEFAULTS, key: 'content-01', payloadKB: 48, nodeCount: 1400 },
-  { ...CONTENT_DEFAULTS, key: 'content-02', payloadKB: 84, nodeCount: 1950 },
-  { ...CONTENT_DEFAULTS, key: 'content-03', payloadKB: 120, nodeCount: 2500 },
-  { ...CONTENT_DEFAULTS, key: 'content-04', payloadKB: 156, nodeCount: 3050 },
-  { ...CONTENT_DEFAULTS, key: 'content-05', payloadKB: 192, nodeCount: 3600 },
-]
+const SPREAD = [0.4, 0.7, 1.0, 1.3, 1.6] as const
+
+/** 인스턴스 간에 변할 수 있는 축 — 전부 수치형이어야 한다 */
+type NumericAxis = {
+  [K in keyof TypeDefaults]: TypeDefaults[K] extends number ? K : never
+}[keyof TypeDefaults]
+
+/** 유형별 지배 축 — 이 축만 인스턴스 간에 변한다 */
+const DOMINANT_AXIS: Record<RouteType, NumericAxis> = {
+  content: 'payloadKB',
+  list: 'nodeCount',
+  dashboard: 'interactiveCount',
+  form: 'interactiveCount',
+  personalized: 'fetchDelayMs',
+}
+
+function buildRoutes(): Route[] {
+  const out: Route[] = []
+  for (const type of ROUTE_TYPES) {
+    const base = DEFAULTS[type]
+    const axis = DOMINANT_AXIS[type]
+    SPREAD.forEach((factor, i) => {
+      const key = `${type}-${String(i + 1).padStart(2, '0')}`
+      const scaled = Math.max(1, Math.round(base[axis] * factor))
+      out.push({ ...base, key, [axis]: scaled })
+    })
+  }
+  return out
+}
+
+export const ROUTES: Route[] = buildRoutes()
 
 export function routesOf(type: RouteType): Route[] {
   return ROUTES.filter((r) => r.type === type)

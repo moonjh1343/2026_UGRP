@@ -27,9 +27,21 @@ export function Beacon() {
     }
 
     onLCP(collect)
-    onINP(collect)
-    onCLS(collect)
     onTTFB(collect)
+    /*
+     * INP·CLS는 reportAllChanges로 받는다.
+     *
+     * 기본값(false)에서는 페이지가 숨겨질 때 **한 번만** 확정하는데, 측정 워커가 다른 URL로
+     * 이동하면 pagehide만 발화하는 경우가 있어 그 확정이 flush와 경쟁한다. LCP는 자체 폴백
+     * 관측자로 막았지만 INP·CLS에는 폴백이 없어, 상호작용을 주입했는데도 값이 결측됐다
+     * (5단계 스모크 테스트에서 INP가 전부 null이었다).
+     *
+     * reportAllChanges는 갱신될 때마다 콜백을 부르므로 flush 시점에 항상 최신값이 있다.
+     * INP는 정의상 관측된 상호작용들의 요약이라 중간값도 유효하며, 마지막 보고가
+     * 확정값과 같다.
+     */
+    onINP(collect, { reportAllChanges: true })
+    onCLS(collect, { reportAllChanges: true })
 
     // TBT는 랩 전용 지표라 web-vitals가 제공하지 않는다. 롱태스크에서 직접 합산한다.
     // (제안서 §3.1의 QoE = {LCP, INP, TBT, TTFB})
@@ -60,6 +72,36 @@ export function Beacon() {
      * getEntriesByType('largest-contentful-paint')는 항상 비어 있으므로
      * buffered PerformanceObserver가 유일한 경로다.
      */
+    /*
+     * INP 폴백 관측자.
+     *
+     * onINP만으로는 이 앱에서 INP가 **거의 항상 결측**된다. 원인이 두 겹이다.
+     *  1. `event` 타이밍은 durationThreshold(web-vitals 기본 40ms) 미만이면 엔트리가
+     *     아예 전달되지 않는다. 여기 위젯은 토글·입력뿐이라 대부분 그보다 빠르다.
+     *  2. 엔트리가 없으면 reportAllChanges도 부를 것이 없고, 확정은 페이지 숨김을
+     *     기다리는데 그 시점은 flush와 경쟁한다.
+     *
+     * 그래서 직접 관측한다. 임계값은 16ms(명세상 하한)로 낮추고, 그보다도 빠른 경우는
+     * `performance.interactionCount`로 "상호작용은 있었으나 임계값 미만"임을 구분한다.
+     * **값을 지어내지 않는 것**이 핵심이다 — 상호작용이 아예 없었던 경우와
+     * 빨라서 안 잡힌 경우는 다른 사실이다.
+     */
+    let inpFallback = 0
+    let inpEntries = 0
+    let inpObserver: PerformanceObserver | undefined
+    try {
+      inpObserver = new PerformanceObserver((list) => {
+        for (const e of list.getEntries() as PerformanceEventTiming[]) {
+          if (!e.interactionId) continue
+          inpEntries++
+          inpFallback = Math.max(inpFallback, e.duration)
+        }
+      })
+      inpObserver.observe({ type: 'event', buffered: true, durationThreshold: 16 })
+    } catch {
+      // event timing 미지원 — web-vitals 값에만 의존한다
+    }
+
     let lcpFallback = NaN
     let lcpObserver: PerformanceObserver | undefined
     try {
@@ -79,6 +121,7 @@ export function Beacon() {
       sent = true
       observer?.disconnect()
       lcpObserver?.disconnect()
+      inpObserver?.disconnect()
 
       const nav = performance.getEntriesByType('navigation')[0] as
         | PerformanceNavigationTiming
@@ -88,6 +131,24 @@ export function Beacon() {
       if (typeof metrics.LCP !== 'number' && Number.isFinite(lcpFallback)) {
         metrics.LCP = lcpFallback
         attribution.LCP = { source: 'fallback-observer' }
+      }
+
+      /*
+       * INP 폴백. 세 경우를 구분한다.
+       *   - 임계값 이상 상호작용이 있었다  → 그 최댓값
+       *   - 상호작용은 있었으나 전부 16ms 미만 → 0 (사실이다: 반응이 임계값보다 빨랐다)
+       *   - 상호작용이 아예 없었다        → 결측으로 남긴다 (0이 아니다)
+       */
+      const interactionCount =
+        (performance as Performance & { interactionCount?: number }).interactionCount ?? 0
+      if (typeof metrics.INP !== 'number') {
+        if (inpEntries > 0) {
+          metrics.INP = inpFallback
+          attribution.INP = { source: 'fallback-observer', entries: inpEntries }
+        } else if (interactionCount > 0) {
+          metrics.INP = 0
+          attribution.INP = { source: 'below-threshold', interactionCount }
+        }
       }
 
       const payload = {

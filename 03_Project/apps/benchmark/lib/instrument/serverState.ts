@@ -44,8 +44,25 @@ export function exitRequest() {
   s.inflight = Math.max(0, s.inflight - 1)
 }
 
+/**
+ * 부하 수준의 기준이 되는 **할당 코어 수**.
+ *
+ * 제안서 §5.2의 "서버 부하 30/65/90% CPU"는 컨테이너의 CPU 사용률을 뜻하고,
+ * Fargate에서는 태스크에 할당된 vCPU 대비 비율이다. 이것을 머신 전체 코어 수로 나누면
+ * **단일 스레드 Node 프로세스는 원리적으로 목표에 도달할 수 없다** — 18코어 머신에서
+ * 상한이 100/18 ≈ 5.6%가 되어 30%조차 불가능하다. 실제로 캘리브레이션이 이렇게 깨졌다.
+ *
+ * SUT는 `next start` 단일 프로세스이므로 기본값은 1이다. Fargate에서 `cpu=2048`처럼
+ * 여러 vCPU를 주면 `SUT_CPU_CORES`로 맞춘다. **실험 메타데이터에 반드시 기록해야 하는
+ * 값이다** — 이 값이 다르면 "부하 65%"가 다른 것을 뜻한다.
+ */
+const ALLOCATED_CORES = Math.max(1, Number(process.env.SUT_CPU_CORES ?? 1) || 1)
+
 export type ServerSnapshot = {
+  /** 할당 CPU 대비 사용률(%). 머신 전체가 아니라 ALLOCATED_CORES 기준이다 */
   cpuPct: number
+  /** cpuPct의 분모. 다른 환경의 값과 비교하려면 이 값이 같아야 한다 */
+  allocatedCores: number
   memPct: number
   rssMB: number
   inflight: number
@@ -78,7 +95,8 @@ export function snapshot(): ServerSnapshot {
   const mem = process.memoryUsage()
 
   return {
-    cpuPct: Math.min(100, (usedUs / elapsedUs / cpuCount) * 100),
+    cpuPct: Math.min(100, (usedUs / elapsedUs / ALLOCATED_CORES) * 100),
+    allocatedCores: ALLOCATED_CORES,
     memPct: (mem.rss / os.totalmem()) * 100,
     rssMB: mem.rss / 1024 / 1024,
     inflight: s.inflight,

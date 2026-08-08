@@ -25,7 +25,16 @@ Verification scripts require a running server. Each gates one implementation sta
 | `npm run analyze:routes` | 모드별 번들 KB 룩업 테이블 생성 (→ 재빌드) | — |
 | `npm run measure:render` | `C_render(m)` 반복 집계 | — |
 
-Stages 1–4 pass; 5 (부하·측정 워커) is not started.
+Stage 5 lives outside the app, in its own packages (`npm install` in each):
+
+```bash
+cd 03_Project/load    && node calibrate.mjs            # 목표 CPU → VU 이진 탐색
+cd 03_Project/workers && node verify-variance.mjs      # 5단계 합격 기준
+cd 03_Project/workers && node run.mjs --name pilot     # factorial 수집 (재개 가능)
+```
+
+k6 is not installed in this environment; `load/generator.mjs` is the local stand-in and reads
+the same `load/profile.json` as the k6 deployment script.
 
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
@@ -88,5 +97,8 @@ Non-ASCII directory names — quote paths in shell commands.
 - `03_Project/docs/` — design documents
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
+- `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.
+- `03_Project/workers/` — Playwright measurement workers. `lib/grid.mjs` is the version-controlled experiment definition, not a script parameter.
+- `03_Project/workers/runs/` — collected data (gitignored).
 
 `.gitignore` excludes all PDF/DOCX/PPTX/HWP/XLSX and all of `99_기타/` — that directory holds invoices and receipts. The repo is private, but keep binaries and personal documents out of it regardless.

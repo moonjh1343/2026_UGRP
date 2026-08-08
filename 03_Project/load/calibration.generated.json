@@ -1,0 +1,65 @@
+{
+  "note": "calibrate.mjs 산출물. 셀 정의의 일부이므로 손으로 고치지 말 것. 하드웨어가 바뀌면 다시 돌린다.",
+  "generatedAt": "2026-08-08T14:23:58.869Z",
+  "base": "http://127.0.0.1:3000",
+  "allocatedCores": 1,
+  "machineCores": 18,
+  "profileMode": "stream",
+  "routes": [
+    {
+      "type": "content",
+      "key": "content-02",
+      "weight": 3
+    },
+    {
+      "type": "list",
+      "key": "list-03",
+      "weight": 3
+    },
+    {
+      "type": "dashboard",
+      "key": "dashboard-03",
+      "weight": 2
+    },
+    {
+      "type": "form",
+      "key": "form-02",
+      "weight": 1
+    },
+    {
+      "type": "personalized",
+      "key": "personalized-03",
+      "weight": 3
+    }
+  ],
+  "tolerance": 4,
+  "levels": {
+    "idle": {
+      "vus": 0,
+      "cpuPct": 0.3096439095040703,
+      "eventLoopP95Ms": 21.069823,
+      "requests": 0
+    },
+    "low": {
+      "vus": 6,
+      "cpuPct": 31.068591697057503,
+      "eventLoopP95Ms": 21.299199,
+      "target": 30,
+      "reached": true
+    },
+    "mid": {
+      "vus": 30,
+      "cpuPct": 62.847864101923555,
+      "eventLoopP95Ms": 21.463039,
+      "target": 65,
+      "reached": true
+    },
+    "high": {
+      "vus": 71,
+      "cpuPct": 91.93387273998601,
+      "eventLoopP95Ms": 21.577727,
+      "target": 90,
+      "reached": true
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@ugrp/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "적응형 렌더링 연구 측정 워커 — CDP 스로틀링, 상호작용 주입, factorial 수집",
+  "scripts": {
+    "verify": "node verify-variance.mjs",
+    "collect": "node run.mjs",
+    "calibrate": "node ../load/calibrate.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.57.0"
+  }
+}

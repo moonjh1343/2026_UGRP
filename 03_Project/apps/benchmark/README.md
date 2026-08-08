@@ -112,7 +112,8 @@ forced → single → bot → circuit → policy → infeasible → margin → s
 | form | `interactiveCount` (INP) | 배제 |
 | personalized | `fetchDelayMs` (서버 부하 민감) | 배제 |
 
-`Σ|M(r)| = 110` — 제안서 §5.2의 8,800셀 그리드(`80 × 110`)와 일치한다.
+`Σ|M(r)| = 110` — 행동 공간의 크기다. 실제 측정 셀은 SSG의 캐시 상태 축(miss/hit/stale)이
+붙어 `80 × (110 + 10×2) = 10,400`이 된다(제안서 §5.2).
 
 ### 손대기 전에 알아야 할 것
 

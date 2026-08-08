@@ -83,7 +83,15 @@ const opened = await ckpt.open({
   warmup: WARMUP,
   seeds: { order: ORDER_SEED },
   filter,
+  /*
+   * 두 수를 모두 기록한다(제안서 §5.2 각주).
+   *   sumCandidateModes — 행동 공간의 크기 Σ_r |M(r)|
+   *   cellCount         — 캐시 축까지 반영한 실제 측정 셀 수
+   * 서로 다른 질문에 답하므로 하나만 남기면 나중에 복원할 수 없다.
+   */
+  sumCandidateModes: table.totalCandidateCells,
   cellCount: cells.length,
+  fullGridCellCount: expandGrid({ routes: table.routes }).length,
   calibration: calibration?.levels ?? null,
   env,
 })

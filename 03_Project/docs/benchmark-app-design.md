@@ -159,7 +159,9 @@ export function renderFor(mode: Mode, type: RouteType) {
 
 ## 4. 행동 공간은 라우트마다 다르다
 
-제안서 §3.1은 행동 공간을 `M = {CSR, SSR, Streaming SSR, SSG·ISR, Islands}`로 정의하지만, §3.5의 하드 규칙과 합치면 **실제 후보는 라우트에 따라 부분집합**이 된다.
+> 제안서 §3.1.1에 반영됨. 이 절은 그 제약을 앱에서 구현하는 방법이다.
+
+**실제 후보는 라우트에 따라 부분집합**이다.
 
 ```
 M(route) ⊆ M
@@ -167,7 +169,7 @@ M(route) ⊆ M
 
 | 배제 규칙 | 근거 |
 |---|---|
-| `personalizedRatio > 0` → SSG·ISR 배제 | 사용자별 데이터를 정적 캐시로 내보내는 것은 애초에 유효한 선택지가 아니다 |
+| `personalizedRatio > 0.2` → SSG·ISR 배제 | 사용자별 데이터를 정적 캐시로 내보내는 것은 애초에 유효한 선택지가 아니다. 임계값 아래(목록형 등)는 공용 페이로드만 ISR로 캐시하는 하이브리드가 성립 |
 | 결제·인증 라우트 → SSR 고정 | 정합성 리스크를 모델에 위임하지 않음 |
 | 크롤러 UA → SSR 고정 | SEO 리스크를 모델에 위임하지 않음 |
 | `freshnessMs < revalidate` → SSG·ISR 배제 | 요구 신선도를 못 맞추는 모드는 후보가 아니다 |
@@ -178,10 +180,12 @@ factorial 수집 시에도 배제된 셀은 **아예 측정하지 않는다.** �
 
 ```ts
 // lib/routes.ts
+export const THETA_P = 0.2                      // 제안서 §3.1.1
+
 export function candidateModes(route: Route): Mode[] {
-  let m: Mode[] = ['csr', 'ssr', 'stream', 'islands']
-  if (route.personalizedRatio === 0 && route.freshnessMs >= REVALIDATE_MS) m.push('ssg')
-  if (route.hardPinned) return ['ssr']
+  if (route.hardPinned) return ['ssr']          // 결제·인증
+  const m: Mode[] = ['csr', 'ssr', 'stream', 'islands']
+  if (route.personalizedRatio <= THETA_P && route.freshnessMs >= REVALIDATE_MS) m.push('ssg')
   return m
 }
 ```
@@ -195,7 +199,7 @@ export function candidateModes(route: Route): Mode[] {
 | 유형 | 지배 요인 | SEO | 개인화 | SSG 가능 | 예상 우세 모드 |
 |---|---|---|---|---|---|
 | **콘텐츠형** | 전송 바이트 | 필수 | 없음 | ○ | SSG·ISR |
-| **목록형** | DOM 노드 수 | 중요 | 낮음 | 부분 | SSG / Streaming |
+| **목록형** | DOM 노드 수 | 중요 | 낮음 | ○ (ISR + 클라 개인화) | SSG / Streaming |
 | **대시보드형** | 하이드레이션 CPU | 무관 | 높음 | × | CSR / Islands |
 | **폼형** | 인터랙션 준비(INP) | 낮음 | 중간 | × | Islands |
 | **개인화형** | 캐시 불가 + 서버 부하 | 무관 | 최대 | × | 부하 의존 |
@@ -343,25 +347,28 @@ Set-Cookie: __prof=<base64({lcpP50, tbtP50, deviceMemory, hc})>; Max-Age=…
 
 ---
 
-## 8. ServerCost 정의 문제 — SSG가 부당하게 이긴다
+## 8. ServerCost 측정 요구사항
 
-제안서 §3.1은 `ServerCost`를 "요청당 렌더링 CPU 시간"으로 정의한다. **이 정의를 그대로 쓰면 SSG·ISR이 거의 항상 이긴다.** 캐시 히트 시 렌더 CPU가 0이기 때문이다.
+> 제안서 §3.1.2에 반영됨. 이 절은 앱이 무엇을 내보내야 그 계산이 가능한지를 정리한다.
 
-하지만 SSG는 비용을 없앤 게 아니라 **빌드·재검증 시점으로 옮긴** 것이다. 공정하게 비교하려면 amortize해야 한다.
+제안서의 환산 정의는 다음과 같다.
 
 ```
-ServerCost(ssg) = 렌더 1회 CPU / (revalidate 주기 동안의 요청 수)
+ServerCost(x, m) = C_render(m) × missRate(x, m) + C_serve(m) + μ × C_store(m)
+missRate(x, ssg) = 1 / max(1, rps_r × T)
 ```
 
-즉 트래픽이 많을수록 SSG가 유리해지고, 트래픽이 희박하면 이점이 사라진다. 이 관계 자체가 흥미로운 결과이므로 **요청률을 피처로 넣어야** 모델이 학습할 수 있다.
+앱이 이 값을 계산 가능하게 하려면 아래를 내보내야 한다.
 
-| 항목 | 처리 |
+| 필요한 값 | 앱의 책임 |
 |---|---|
-| 캐시 히트 | `ServerCost = 0`이 아니라 amortized 값 |
-| 캐시 미스·stale | 실제 렌더 CPU 전액 |
-| 요청률 | 서버 상태 스냅샷에 `rps`를 추가해 피처화 |
+| `missRate` | 응답에 `x-cache-status: hit \| miss \| stale` (§2) |
+| `C_render(m)` | Idle 셀에서 per-request CPU 델타 (§7) |
+| `C_serve(m)` | 캐시 히트 응답에서도 CPU 델타 기록 |
+| `rps_r` | 서버 상태 스냅샷에 **라우트별** 요청률 — 전역 rps로는 라우트별 캐시 효율을 반영 못 함 |
+| `C_store(m)` | 모드별 캐시 엔트리 크기 |
 
-`x-cache-status`를 반드시 기록해야 이 계산이 가능하다. 이것이 §2 응답 헤더에 그 필드가 있는 이유다.
+랩 실험에서는 `rps_r`이 k6 부하로 통제되므로 알려진 값이다. 셀 정의에 포함시켜 기록한다.
 
 ---
 

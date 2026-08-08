@@ -30,7 +30,16 @@ export const SEQUENCES = {
   content: [
     { action: 'click', selector: '.toc button' },
     { action: 'click', selector: '.share button' },
-    { action: 'type', selector: '.note input', text: '측정' },
+    /*
+     * 세 번째는 목차를 다시 접는다.
+     *
+     * 원래 `.note input`에 입력했는데, 콘텐츠형은 `interactiveCount`가 2라 위젯이
+     * toc·share뿐이고 note는 **존재한 적이 없다**(lib/data/content.ts의 kind 배정).
+     * 그래서 매 반복 3초짜리 waitFor 타임아웃을 그냥 버렸고, 측정 창이 다른 유형보다
+     * 3초 길어져 주변 노이즈에 더 오래 노출됐다. 실패가 기록되고 있었으므로
+     * 조용한 오염은 아니었지만, 셀마다 측정 창 길이가 다른 것은 통제 실패다.
+     */
+    { action: 'click', selector: '.toc button' },
   ],
   // 아래 유형별 시퀀스는 전부 **실제 사용자 입력**만 쓴다 — 이유는 파일 하단 참조
   list: [

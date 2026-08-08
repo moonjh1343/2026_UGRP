@@ -163,6 +163,16 @@ export function Beacon() {
           domInteractive: nav?.domInteractive ?? 0,
           transferSize: nav?.transferSize ?? 0,
           encodedBodySize: nav?.encodedBodySize ?? 0,
+          /*
+           * 응답 수신 구간 = Streaming SSR의 청크 전달 시간.
+           *
+           * 스트리밍은 LCP 요소가 실린 청크가 한 세그먼트에 담기느냐 두 번에 걸치느냐가
+           * 실행마다 갈리고, 그 차이가 RTT의 배수로 나타난다(실측 +301ms ≈ 2×150ms).
+           * 제어할 수 없는 축이므로 그리드에 넣을 수 없고, **공변량으로 기록해**
+           * 사후에 분리한다. 다른 모드에서는 거의 0이라 비교 기준도 된다.
+           */
+          responseDuration:
+            nav && nav.responseEnd > 0 ? nav.responseEnd - nav.responseStart : 0,
         },
         attribution,
         hydrationErrors: readHydrationErrors(),
@@ -245,6 +255,16 @@ function summarize(m: MetricWithAttribution): Record<string, unknown> {
   // attribution 전체는 무겁다. 모드 간 차이가 **어디서** 생기는지 보는 데
   // 필요한 항목만 추린다(설계 문서 §7).
   return {
+    /*
+     * LCP 요소의 정체성. **분포가 두 개로 갈리는지 판정하는 유일한 단서다.**
+     *
+     * LCP 후보가 실행마다 바뀌면(예: 히어로 이미지 ↔ 텍스트 블록) 같은 셀 안에서
+     * 서로 다른 두 사건을 재게 되고, 값은 이봉 분포가 된다. 크기·시간만 기록하면
+     * "분산이 크다"까지만 알 수 있을 뿐 **무엇이 통제되지 않았는지** 알 수 없다.
+     * target은 셀렉터 문자열, url은 이미지처럼 별도 요청이 필요한 후보에만 있다.
+     */
+    target: a.target ?? a.element,
+    url: a.url,
     ttfb: a.timeToFirstByte,
     resourceLoadDelay: a.resourceLoadDelay,
     resourceLoadDuration: a.resourceLoadDuration,

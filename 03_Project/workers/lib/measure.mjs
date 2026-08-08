@@ -196,6 +196,8 @@ export async function measureOnce({ base, browser, cell, rep, allowStale = true 
         longTasks: m.longTasks ?? null,
         transferSize: m.transferSize ?? null,
         encodedBodySize: m.encodedBodySize ?? null,
+        /** 스트리밍 청크 전달 구간 — 제어 불가능한 축의 공변량(설계 문서 §11-32) */
+        responseDuration: m.responseDuration ?? null,
       },
       attribution: joined.beacon.attribution ?? {},
       /*

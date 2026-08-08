@@ -197,6 +197,13 @@ for (const [level, group] of byLoad) {
           vus,
           ts: Date.now(),
           ...r.metrics,
+          /*
+           * attribution을 함께 남긴다. 이것이 빠지면 "모드 간 차이가 어디서 생기는지"를
+           * 사후에 분해할 수 없고(설계 문서 §7), 분산이 큰 셀을 만났을 때
+           * 원인이 TTFB인지 리소스 로드인지 렌더 지연인지 — 혹은 LCP 요소 자체가
+           * 실행마다 바뀐 것인지 — 구분할 방법이 사라진다.
+           */
+          attribution: r.attribution,
           cacheStatus: r.cacheStatus,
           serverRenderCpuUs: r.serverRenderCpuUs,
           serverRenderWallMs: r.serverRenderWallMs,

@@ -224,7 +224,7 @@ $$m_t = \arg\min_{m \in M(x_t)} \left( \hat{f}_\theta(x_t, m) - \beta \sqrt{x_t^
 | 요인 | 수준 | 비고 |
 |---|---|---|
 | 기기 등급 | 4 (Flagship / Mid / Low / Very Low) | CPU 스로틀 1× / 2× / 4× / 6× |
-| 네트워크 | 5 (5G / LTE / 3G Fast / 3G Slow / Offline-first) | 대역폭·RTT·패킷손실 조합 |
+| 네트워크 | 5 (5G / LTE / 3G Fast / 3G Slow / Offline-first) | 대역폭·RTT·패킷손실 조합. Offline-first는 완전 오프라인이 아니라 극단적 저대역·고지연(0.25Mbps, RTT 900ms)으로 해석한다 — 완전 오프라인은 페이지가 뜨지 않아 측정이 성립하지 않는다 |
 | 라우트 | 25 (콘텐츠형·목록형·대시보드형·폼형·개인화형 각 5) | 정적 분석 특징이 다양하게 분포하도록 선정 |
 | 서버 부하 | 4 (Idle / 30% / 65% / 90% CPU) | k6 배경 부하로 유지 |
 | 렌더링 모드 | 라우트별 $\|M(r)\|$ (4~5) | 실행 불가능 조합은 그리드에서 제외 |

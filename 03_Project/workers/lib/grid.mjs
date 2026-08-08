@@ -24,11 +24,12 @@ export const DEVICES = [
  * 네트워크 — CDP `Network.emulateNetworkConditions` 파라미터.
  * throughput은 bytes/s, latency는 ms(편도가 아니라 RTT로 적용된다).
  *
- * **`offline-first`의 해석에 주의.** 제안서 §5.2는 5번째 수준을 "Offline-first"라고 쓰는데,
+ * **`offline-first` 해석 — 확정.** 제안서 §5.2는 5번째 수준을 "Offline-first"라고 쓰는데,
  * 네트워크 조건으로서 완전 오프라인은 측정이 성립하지 않는다(페이지가 뜨지 않는다).
- * 여기서는 "오프라인 우선 설계가 필요할 만큼 열악한 망"으로 해석해 극단적 저대역·고지연
- * 프로파일로 구현했다. 다른 해석(예: Service Worker 캐시 히트 상태)을 의도했다면
- * 이 항목의 정의를 바꿔야 하고, 그것은 실험 설계 변경이다.
+ * "오프라인 우선 설계가 필요할 만큼 열악한 망"으로 해석해 극단적 저대역·고지연 프로파일로
+ * 확정했다. Service Worker 캐시 히트 상태 등 다른 해석은 채택하지 않는다 — SUT에
+ * Service Worker가 없고, 그 축을 넣는 것은 계측을 새로 설계해야 하는 별도 실험이다.
+ * 이 다섯 번째 수준은 다른 넷과 마찬가지로 **네트워크 조건 축**으로만 취급한다.
  */
 export const NETWORKS = [
   { id: '5g', down: 100e6 / 8, up: 20e6 / 8, latency: 10, ect: '4g', downlink: 100 },

@@ -32,7 +32,7 @@ export const CIRCUIT = {
   errorRate5xx: num(process.env.POLICY_CB_5XX, 0.01),
 }
 
-/** 세션당 모드 전환 상한(제안서 §3.5). 라우트 단위로 센다 — 아래 주석 참조. */
+/** (세션, 라우트) 쌍당 모드 전환 상한(제안서 §3.5) — 아래 주석 참조. */
 export const SESSION_SWITCH_CAP = num(process.env.POLICY_SWITCH_CAP, 1)
 
 /**

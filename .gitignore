@@ -1,0 +1,17 @@
+# 문서 바이너리 — 로컬에만 보관 (연구계획서, 참고 논문, 발표자료)
+*.pdf
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.hwp
+*.hwpx
+*.xlsx
+
+# 결제·행정 문서 및 기타 자료
+99_기타/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

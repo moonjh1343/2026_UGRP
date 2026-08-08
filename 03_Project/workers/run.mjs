@@ -99,6 +99,23 @@ const opened = await ckpt.open({
 console.log(`\n실험 '${NAME}' — 셀 ${cells.length}개 × 반복 ${REPS}회`)
 console.log(`  브라우저 ${env.browser.version} · Node ${env.node} · Next ${env.next}`)
 console.log(`  순서 시드 ${ORDER_SEED}`)
+
+/*
+ * 예상 소요를 미리 알린다. stale 축은 반복마다 재검증 창(60초)을 통째로 기다리므로
+ * 셀 수가 아니라 **대기 시간**이 실행 시간을 지배한다. 시작한 뒤에 알게 되면 늦다.
+ */
+const staleCells = cells.filter((c) => c.cache === 'stale').length
+const otherCells = cells.length - staleCells
+const staleHours = (staleCells * REPS * 62) / 3600
+const otherHours = (otherCells * REPS * 5) / 3600
+console.log(
+  `  예상 ${(staleHours + otherHours).toFixed(1)}시간` +
+    `${staleCells ? ` (stale ${staleCells}셀이 ${staleHours.toFixed(1)}시간)` : ''} — 단일 프로세스 직렬 기준`,
+)
+if (staleCells > 0 && !ALLOW_STALE) {
+  console.log('  주의: --skip-stale이 켜져 있다. 검증용 탈출구이지 수집 옵션이 아니다 —')
+  console.log('        stale 셀을 빼면 §3.1.2의 missRate를 관측할 수 없다.')
+}
 if (opened.resumed) {
   console.log(`  재개 — 완료 ${opened.doneCount}셀`)
   if (opened.drift.length) {

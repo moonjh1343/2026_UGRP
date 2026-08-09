@@ -403,8 +403,13 @@ for (const [level, group] of byLoad) {
           /*
            * 이 셀을 시작할 때 실측한 서버 CPU. `vus`는 설정값이고 이쪽이 관측값이다 —
            * 둘을 함께 남겨야 "부하가 실제로 걸려 있었는가"를 사후에 확인할 수 있다.
+           *
+           * 창 길이를 함께 남긴다. 셀당 한 표본이라 창이 짧으면 값이 부하 수준이 아니라
+           * 잡음을 가리키고, 창을 바꾼 전후의 행이 한 데이터셋에 섞인다 — 그 구분이
+           * 행 안에 없으면 사후에 복원할 수 없다. run2의 앞부분 60셀이 2초 창이다.
            */
           serverCpuPct: guard.cpuPct,
+          serverCpuWindowMs: verifier.observeMs,
           ts: Date.now(),
           ...r.metrics,
           /*

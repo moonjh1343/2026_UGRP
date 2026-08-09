@@ -260,17 +260,41 @@ export async function startRemoteLoad({ controlUrl, vus }) {
  * 부하가 측정 대상에 반응하는 제어 루프가 되어 외생성이 깨진다 — 캘리브레이션을
  * 측정 전에 끝내는 이유가 그대로 무너진다.
  */
-export function makeLoadVerifier({ base, expectedCpuPct, tolerance = 12, streakLimit = 3, log = console.log }) {
+export function makeLoadVerifier({
+  base,
+  expectedCpuPct,
+  tolerance = 12,
+  streakLimit = 3,
+  /**
+   * **관측창은 기대값을 만든 창과 비교 가능해야 한다.**
+   *
+   * 2초였다. 그 창의 표본은 ±13%p로 흩어지는데(slice-b2 run2 실측: low 15.0~41.9,
+   * mid 51.3~69.6, high 72.5~100.0), 그걸 180초 평균과 ±12%p 허용치로 비교했다.
+   * 즉 감시가 부하 이탈이 아니라 자기 표본 잡음을 재고 있었다.
+   *
+   * 오경보 한 번이 비싸다: 3회 연속이면 샤드가 멈추고, `States.TaskFailed` 재시도를
+   * 뺐으므로 Parallel이 실행 전체를 끝낸다. 셀당 300개 검사면 우연한 3연속은
+   * 드물지 않다.
+   *
+   * 15초는 thinkTime(1초)의 15배라 VU 위상이 평균되고, 셀 하나(~3분)에 비하면
+   * 5% 비용이다. 캘리브레이션의 버스트 문제와 같은 종류의 오류였다 — 변동하는
+   * 양을 너무 짧은 창으로 재고 그 값을 셀 정의로 삼는 것.
+   */
+  observeMs = 15_000,
+  log = console.log,
+}) {
   let streak = 0
   let checks = 0
   return {
+    /** 각 행에 함께 기록해 어느 창으로 잰 값인지 남긴다. 창을 바꾸면 값의 성격이 바뀐다. */
+    observeMs,
     /** 셀 하나를 시작하기 전에 부른다. 오염 시 { ok: false }를 돌려준다. */
     async check() {
       if (expectedCpuPct == null) return { ok: true, cpuPct: null }
       let m
       try {
         await snapshot(base) // 기준점 리셋
-        await sleep(2000)
+        await sleep(observeMs)
         m = await snapshot(base)
       } catch (err) {
         return { ok: true, cpuPct: null, note: `메트릭 조회 실패(${err.message}) — 판단 보류` }

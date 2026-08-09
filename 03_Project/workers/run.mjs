@@ -175,7 +175,27 @@ const opened = await ckpt.open({
   sumCandidateModes: table.totalCandidateCells,
   cellCount: cells.length,
   fullGridCellCount: expandGrid({ routes: table.routes }).length,
-  calibration: calibration?.levels ?? null,
+  /*
+   * **저장된 캘리브레이션은 원격 부하 모드에서 이 실행을 설명하지 않는다.**
+   *
+   * VU→CPU 관계는 태스크 크기에 종속이다. `calibration.generated.json`은 18코어 중
+   * 1코어를 할당한 개발 머신 기준(low 6 / mid 30 / high 71)인데, 그 값이 Fargate
+   * 2 vCPU 실행의 experiment.json에 그대로 실리면 S3의 실험 기록만 읽는 사람은
+   * "부하 65% = VU 30"이라는 **틀린 값**을 보게 된다. 1샤드 검증에서 실제로 그렇게
+   * 기록됐다(2026-08-09).
+   *
+   * 원격 모드에서 실제로 쓰인 값은 실행 시점 이진 탐색의 결과이고, 그것은
+   * `recordCalibration()`이 따로 남긴다(로컬은 calibration.observed.json,
+   * 클라우드는 DynamoDB의 `#calibration#<shard>`). 여기서는 null로 두어
+   * **모른다는 사실**을 남긴다 — 다른 기계의 숫자를 남기는 것보다 정직하다.
+   *
+   * 모양은 바꾸지 않는다. training의 `features.py`가 `{수준: {cpuPct,
+   * eventLoopP95Ms}}`를 그대로 순회하므로, null이면 그쪽 기본값(0)으로 떨어진다.
+   */
+  calibration: LOAD_CONTROL_URL ? null : (calibration?.levels ?? null),
+  calibrationSource: LOAD_CONTROL_URL
+    ? { mode: 'remote-search', recordedAt: `#calibration#${process.env.UGRP_SHARD_INDEX ?? 0}` }
+    : { mode: 'stored-local', file: 'load/calibration.generated.json' },
   env,
 })
 

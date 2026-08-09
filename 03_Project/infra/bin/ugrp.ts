@@ -14,7 +14,13 @@ import { ShardStack } from '../lib/shard-stack'
 import { OrchestrationStack } from '../lib/orchestration-stack'
 import { ServingStack } from '../lib/serving-stack'
 import { ServingOriginStack } from '../lib/serving-origin-stack'
-import { REGION, DEFAULT_COLLECTION, CollectionConfig, ImageDigests } from '../lib/config'
+import {
+  REGION,
+  DEFAULT_COLLECTION,
+  CollectionConfig,
+  ImageDigests,
+  requireShardCount,
+} from '../lib/config'
 
 const app = new App()
 
@@ -26,7 +32,10 @@ const env: Environment = {
 const collection: CollectionConfig = {
   ...DEFAULT_COLLECTION,
   experiment: app.node.tryGetContext('ugrp:experiment') ?? DEFAULT_COLLECTION.experiment,
-  totalShards: Number(app.node.tryGetContext('ugrp:shardCount') ?? DEFAULT_COLLECTION.totalShards),
+  totalShards: requireShardCount(
+    Number(app.node.tryGetContext('ugrp:shardCount') ?? DEFAULT_COLLECTION.totalShards),
+    'collection',
+  ),
 }
 
 const prefix = `Ugrp-${collection.experiment}`

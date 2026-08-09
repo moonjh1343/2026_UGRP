@@ -50,8 +50,19 @@ export async function captureEnv({ base, browser, seeds }) {
       version: browser ? await browser.version() : null,
     },
     playwright: playwrightVersion,
-    next: appPkg?.dependencies?.next ?? null,
-    react: appPkg?.dependencies?.react ?? null,
+    /*
+     * **SUT가 답한 값을 먼저 쓴다.** 저장소의 package.json을 읽는 것은 로컬에서만
+     * 참이었다 — 클라우드에서는 워커 컨테이너에 `apps/benchmark/`가 없어 두 값이
+     * 통째로 결측됐고(1샤드 검증에서 발견), 재현성 요구사항이 요구하는 항목이
+     * 조용히 null로 남았다.
+     *
+     * 파일은 폴백으로만 둔다. 순서가 이런 이유는 결측 방지만이 아니다 — 저장소의
+     * 의존성 범위와 배포된 이미지가 다를 수 있고, 데이터에 남아야 하는 것은
+     * **그 측정을 실제로 처리한 SUT**의 버전이다.
+     */
+    next: policy?.runtime?.next ?? appPkg?.dependencies?.next ?? null,
+    react: policy?.runtime?.react ?? appPkg?.dependencies?.react ?? null,
+    sutNode: policy?.runtime?.node ?? null,
     worker: workerPkg?.version ?? null,
     /*
      * 정책 버전과 모델 버전. 5단계 수집 시점의 서러게이트가 미학습 자리표시자라면

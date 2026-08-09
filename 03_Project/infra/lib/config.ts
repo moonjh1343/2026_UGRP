@@ -103,3 +103,31 @@ export const DEFAULT_COLLECTION: CollectionConfig = {
 /** 부하 수준 — grid.mjs의 LOADS와 같은 순서여야 한다. */
 export const LOADS = ['idle', 'low', 'mid', 'high'] as const
 export type Load = (typeof LOADS)[number]
+
+/**
+ * 샤드 수 검증.
+ *
+ * **샤드 하나는 부하 수준 하나만 맡는다**(`workers/lib/shard.mjs`의
+ * `allocateShardsByLoad`). 부하는 SUT 전역 조건이라 한 샤드가 두 수준을 오가면
+ * 전환 안정화 구간이 측정에 섞이기 때문이다. 따라서 샤드 수는 부하 수준 수보다
+ * 적을 수 없다.
+ *
+ * 이 검사가 없으면 `-c ugrp:shardCount=1`이 **합성도 배포도 성공한 뒤 워커가
+ * 시작하자마자 죽는다** — 태스크 정의에 박히는 `--shard-count 1`을 shard.mjs가
+ * 거부한다. 1샤드 검증 배포에서 실제로 그렇게 됐다(2026-08-09).
+ * 다이제스트와 같은 이유로 합성 단계에서 막는다: 배포되고 나서 드러나는 오류는
+ * 이미 돈과 시간을 쓴 뒤다.
+ */
+export function requireShardCount(n: number, stage: string): number {
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`[${stage}] ugrp:shardCount 가 양의 정수가 아니다: ${n}`)
+  }
+  if (n < LOADS.length) {
+    throw new Error(
+      `[${stage}] 샤드 ${n}개로는 부하 수준 ${LOADS.length}개(${LOADS.join('·')})를 채우지 못한다.\n` +
+        '  샤드 하나가 부하 수준 하나만 맡는 규칙(workers/lib/shard.mjs) 때문에\n' +
+        `  최소 ${LOADS.length}샤드가 필요하다. 더 적게 배포하면 워커가 시작 시 종료한다.`,
+    )
+  }
+  return n
+}

@@ -13,10 +13,10 @@
     "ugrp:shardCount": 20,
     "ugrp:experiment": "grid-v1",
 
-    "//digests": "scripts/push-images.sh가 찍어준 값. 커밋 c66d7c8로 빌드했다 — 이미지를 다시 만들면 태그(=커밋 SHA)와 다이제스트가 함께 바뀌므로 이 블록도 같은 커밋에서 갱신한다. 이번에는 worker만 바뀌었다: 캘리브레이션·부하 제어 수정이 workers/에 있고 load/·apps/benchmark/는 그대로다. 입력이 같으면 같은 바이트가 나오므로 sut·load는 c7c035c와 같은 다이제스트다. 반대로 부하 생성기(load/generator.mjs)를 고치면 worker도 함께 바뀐다 — 워커 이미지가 load/를 담기 때문이다(run.mjs가 로컬 모드에서 generator.mjs를 임포트한다).",
+    "//digests": "scripts/push-images.sh가 찍어준 값. 커밋 d881417로 빌드했다 — 이미지를 다시 만들면 태그(=커밋 SHA)와 다이제스트가 함께 바뀌므로 이 블록도 같은 커밋에서 갱신한다. 이번에도 worker만 바뀌었다: 이탈 감시의 관측창 수정이 workers/에 있고 load/·apps/benchmark/는 그대로다. 입력이 같으면 같은 바이트가 나오므로 sut·load는 c7c035c와 같은 다이제스트다. 반대로 부하 생성기(load/generator.mjs)를 고치면 worker도 함께 바뀐다 — 워커 이미지가 load/를 담기 때문이다(run.mjs가 로컬 모드에서 generator.mjs를 임포트한다).",
     "ugrp:digests": {
       "sut": "sha256:abcfbc5e491d9b52281b984659999499eba6221a7c4302fd4398b94864f7e57d",
-      "worker": "sha256:b7f72bc476669edf49f825ec203243e2dfe7bcebadfd709211f5ad3aa3c91bc4",
+      "worker": "sha256:5b6146f923d0e6ecf47740d2f616c8877e62a76b3e0382107952741098b30bc2",
       "load": "sha256:c0b432eacf3cf1e3ee81aea22b517204695620f582bf60ea1a0758ac3a2a013b"
     }
   }

@@ -15,6 +15,7 @@
  * 모듈 사용:  const load = await startLoad({ vus: 20 }); … ; await load.stop()
  */
 import { readFile } from 'node:fs/promises'
+import { setMaxListeners } from 'node:events'
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
 
@@ -52,14 +53,46 @@ export async function startLoad({ vus, profile }) {
   const controller = new AbortController()
   const stats = { requests: 0, errors: 0 }
 
+  /*
+   * **경고를 쓸모 있게 유지한다.**
+   *
+   * 정상 상태에서 abort 리스너 수는 VU 수로 유계다 — 각 VU가 sleep 중일 때 하나씩
+   * 갖는다. 기본 임계값 10에서는 VU가 11개만 넘어도 매 실행 경고가 떠서, 그 경고가
+   * 진짜 누수를 뜻하는지 아닌지 구별할 수 없다.
+   *
+   * 그 구별이 실제로 필요했다: slice-b 실패의 원인이 이 시그널의 리스너 누수였고
+   * (프로덕션 로그에 8만 개), 경고가 평소에도 뜨는 상태였다면 그냥 잡음으로 넘겼을
+   * 것이다. VU 수 + 여유로 올려 두면 **이후에 뜨는 경고는 누수 신호다.**
+   */
+  setMaxListeners(vus + 10, controller.signal)
+
   const think = Number(p.thinkTimeMs ?? 0)
+  /*
+   * **정상 경로에서 리스너를 반드시 해제한다.**
+   *
+   * `controller.signal`은 실행 전체를 사는 객체다. 해제하지 않으면 sleep 한 번마다
+   * 리스너가 하나씩 영구히 쌓이는데, thinkTime 1초 × VU 96이면 초당 ~96개다.
+   * 그러면 부하 생성기 자신의 CPU가 리스너 목록 관리에 잡아먹혀 **요청 발행률이
+   * 시간이 갈수록 떨어진다** — VU를 고정해 두었는데도 SUT의 CPU가 흘러내린다.
+   *
+   * 이 누수로 slice-b 첫 수집이 죽었다(2026-08-09). 부하 91.4% → 42.4%로 단조 감소해
+   * 워커의 이탈 감시가 3회 연속 초과를 보고 멈췄다. 로그에 리스너 8만 개가 찍혔다.
+   *
+   * 5단계부터 잠복해 있던 결함이다. 캘리브레이션은 짧은 버스트라 누수가 물리기 전에
+   * 끝나고, 로컬 파일럿은 idle 셀만 돌렸다 — 부하 셀을 지속적으로 돌린 것이
+   * 그때가 처음이었다.
+   */
   const sleep = (ms) =>
     new Promise((resolve) => {
-      const t = setTimeout(resolve, ms)
-      controller.signal.addEventListener('abort', () => {
+      const onAbort = () => {
         clearTimeout(t)
         resolve()
-      })
+      }
+      const t = setTimeout(() => {
+        controller.signal.removeEventListener('abort', onAbort)
+        resolve()
+      }, ms)
+      controller.signal.addEventListener('abort', onAbort, { once: true })
     })
 
   const stream = async (id) => {

@@ -62,7 +62,12 @@ def export_tree_json(
         "version": version,
         "distilledFrom": distilled_from,
         "trainedOn": trained_on,
+        # maxDepth는 **분기 레벨 수**다 — 예측 1회당 비교 횟수의 상한이고,
+        # 엣지 추론 예산(<2ms)의 근거가 되는 양이다. 노드 레벨 수(= 이 값 + 1)와
+        # 헷갈리면 예산을 넘긴 트리가 준수한 것처럼 보인다. budget은 설정값,
+        # maxDepth는 실제로 자란 깊이 — 데이터가 얕으면 budget보다 작다.
         "maxDepth": int(tree.get_depth()),
+        "maxDepthBudget": int(tree.max_depth),
         "target": "J_hat",
         "unit": "라우트별 z-정규화된 QoE 비용 + λ·ServerCost (낮을수록 좋음)",
         "warning": warning,

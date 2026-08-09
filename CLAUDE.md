@@ -21,6 +21,7 @@ Verification scripts require a running server. Each gates one implementation sta
 | `npm run check:join` | 서버 레코드 ↔ 클라이언트 비콘이 조인되는가 | 2 |
 | `npm run check:divergence` | 유형별 모드 우열이 서로 다른 방향인가 | 3 |
 | `npm run check:policy` | 정책 교체가 앱에 영향 없는가 / 추론 < 2ms인가 | 4 |
+| `npm run check:tree` | 학습된 트리가 `policy/model/`에 들어갈 모양인가 | 7 |
 | `npm run check:determinism` | 페이로드가 바이트 단위로 동일한가 | — |
 | `npm run analyze:routes` | 모드별 번들 KB 룩업 테이블 생성 (→ 재빌드) | — |
 | `npm run measure:render` | `C_render(m)` 반복 집계 | — |
@@ -37,7 +38,14 @@ k6 is not installed in this environment; `load/generator.mjs` is the local stand
 the same `load/profile.json` as the k6 deployment script.
 
 Stage 6 (factorial collection) runs `run.mjs` against slices of the 10,400-cell grid; a
-run is resumable by re-invoking with the same `--name` (see `workers/README.md`). Stage 7
+run is resumable by re-invoking with the same `--name` (see `workers/README.md`).
+
+**While a collection is running, do not run anything CPU-heavy on this machine** — training,
+builds, typechecks. Background load is supposed to be exogenous, and CPU spent beside the
+measurement makes an `idle` cell's "no background load" false. If it happens anyway, mark the
+window instead of deleting rows: `node quarantine.mjs --name <run> --from <ISO> --to <ISO>
+--reason "..."`. `io.load_runs()` honors those windows, and `--requeue` (after collection
+stops) drops only cells left with too few surviving reps. Stage 7
 (training pipeline) is a separate Python package at `03_Project/training/`:
 
 ```bash
@@ -47,9 +55,43 @@ python scripts/fetch_routes.py     # route snapshot — needs the app server up,
 python scripts/train.py --distill  # load collected runs → label → train → evaluate → distill
 ```
 
+Parallel collection infrastructure is a CDK app at `03_Project/infra/` (`npm run synth` works
+without AWS credentials). The full grid is 813 hours serial; 20 shards bring it to 40.7. A shard
+is one **(SUT + k6 + worker) triple** — nothing is shared between shards, because two workers
+hitting one SUT would break each other's load level. The partitioning rule lives in
+`workers/lib/shard.mjs`, not in the CDK app: which shard measured which cell is experiment
+definition, and without it you cannot control for per-shard hardware variance after the fact.
+See `infra/README.md` for the deviations from the proposal's topology (no ALB/CloudFront in the
+lab path) and why.
+
+```bash
+cd 03_Project/infra && npm install
+npm run synth                      # no credentials needed
+npx cdk synth -c ugrp:shardCount=40
+```
+
+The serving plane is two stacks deployed in that order: `ServingOrigin` (public ALB + SUT in
+`ap-northeast-2`, `-c ugrp:serveOrigin=true`) then `Serving` (CloudFront + Lambda@Edge in
+`us-east-1`, `-c ugrp:servingOrigin=<the ALB DNS>`). It has its own VPC — putting an internet
+gateway in the lab VPC would void the claim that lab measurements have no internet path. The
+ALB accepts only the CloudFront prefix list: a request that reaches the origin directly skips
+the decision layer, and that observation is indistinguishable from a policy-served one
+afterwards. The edge code lives in `03_Project/edge/`. Build its bundle first
+(`cd 03_Project/edge && npm run build -- --origin https://<origin>`; `npm test` runs the
+handlers against real CloudFront event shapes). **The cache key is the whole design**: a
+CloudFront Function folds client hints into `x-ugrp-bucket`, that header — and only that
+header — is in the cache key, and the model runs at origin-request so cache hits pay nothing.
+Read `edge/README.md` before touching it; both the bucket scheme and the decision to bake the
+tree into the bundle instead of AppConfig are load-bearing and depart from the proposal.
+
 `training/ugrp_train/config.py` mirrors JS-side tables (`workers/lib/grid.mjs`'s device/network
 conditions, `policy/features.ts`'s feature vector order, `policy/model/*.json`'s mode index) —
 those copies don't auto-sync; see `training/README.md` for what breaks if they drift.
+`npm run check:tree` is the gate that catches the drift: a tree whose feature name is missing
+from `toVector()` raises nothing at serving time — `surrogate.ts`'s `x[cur.feature] ?? 0` sends
+every request down the left branch instead. Run it on `training/out/tree.json` before copying
+that file over `policy/model/tree.v0.json`. It touches no server, so it is safe during collection;
+the swap itself is not — it needs a rebuild and restart, which kills a running run.
 
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
@@ -113,7 +155,9 @@ Non-ASCII directory names — quote paths in shell commands.
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.
-- `03_Project/workers/` — Playwright measurement workers. `lib/grid.mjs` is the version-controlled experiment definition, not a script parameter.
+- `03_Project/infra/` — AWS CDK app: network, data, shards, orchestration, serving. `cdk.out/` is gitignored.
+- `03_Project/edge/` — policy serving plane. A thin adapter over `policy/`, not a second copy of it. `dist/` and `src/config.generated.js` are generated.
+- `03_Project/workers/` — Playwright measurement workers. `lib/grid.mjs` and `lib/shard.mjs` are the version-controlled experiment definition, not script parameters.
 - `03_Project/workers/runs/` — collected data (gitignored).
 - `03_Project/training/` — Python training pipeline (stage 7). `ugrp_train/` is the package,
   `scripts/` the CLI entry points. `data/` and `out/` are gitignored (generated).

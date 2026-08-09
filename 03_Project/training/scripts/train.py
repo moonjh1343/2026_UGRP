@@ -54,7 +54,11 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("데이터 적재 중...")
-    raw = io.load_runs(args.runs)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        raw = io.load_runs(args.runs)
+        for w in caught:
+            print(f"  주의: {w.message}")
     print(f"  측정 행 {len(raw)}개, 실험 {raw['experiment'].nunique()}개")
 
     snapshot_path = Path(args.snapshot) if args.snapshot else io.DEFAULT_SNAPSHOT

@@ -47,6 +47,24 @@ scripts/
 피처 순서와 엣지 추론 시점의 순서가 다르면 트리는 에러 없이 조용히 틀린 값을 낸다.
 JS 쪽을 고치면 이쪽도 손으로 맞춰야 한다 — 자동 동기화 장치는 없다.
 
+자동 동기화는 없지만 **검사는 있다**. 트리를 배포하기 전에 앱 쪽에서 돌린다:
+
+```bash
+cd ../apps/benchmark && npm run check:tree     # 기본 대상: training/out/tree.json
+```
+
+`toVector()`의 키 집합을 `features.ts` 원본에서 직접 읽어 트리의 분기 피처 이름과
+대조한다. 여기서 걸리는 것이 위에서 말한 조용한 실패다 — `surrogate.ts`의
+`x[cur.feature] ?? 0`은 없는 피처를 0으로 읽고 예외를 내지 않는다.
+
+## 트리 깊이 필드의 정의
+
+`tree.json`의 `maxDepth`는 **분기 레벨 수**다(= 예측 1회당 비교 횟수, sklearn
+`get_depth()`와 같은 관례). 노드 레벨 수는 이보다 1 크다. `maxDepthBudget`은
+`distill_tree(max_depth=...)`로 준 설정값이고, `maxDepth`는 실제로 자란 깊이라
+데이터가 얕으면 예산보다 작게 나온다. 둘을 섞으면 예산을 넘긴 트리가 준수한 것처럼
+보이므로 `check:tree`가 둘 다 대조한다.
+
 ## 라벨 계산이 원본 공식과 다른 지점
 
 `J(x,m) = Σ w_i·z_r(QoE_i) + λ·ServerCost(x,m)`은 제안서 §3.1 그대로다. `ServerCost`만

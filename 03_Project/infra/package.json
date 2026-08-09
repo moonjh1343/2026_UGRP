@@ -1,0 +1,23 @@
+{
+  "name": "@ugrp/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "측정 인프라 (AWS CDK). 6단계 factorial 수집을 샤드로 병렬화한다.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "aws-cdk": "^2.1135.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.263.0",
+    "constructs": "10.5.0"
+  }
+}

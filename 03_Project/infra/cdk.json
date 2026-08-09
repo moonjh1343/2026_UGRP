@@ -1,0 +1,16 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/ugrp.ts",
+  "watch": { "exclude": ["**/node_modules/**", "cdk.out/**"] },
+  "output": "cdk.out",
+  "context": {
+    "@aws-cdk/aws-ecs:disableEcsImdsBlocking": false,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+
+    "//crossStackRefs": "샤드 스택이 network·data의 값을 참조한다. strong이면 소비 중인 export를 생산자가 지울 수 없다 — 샤드를 띄운 채 데이터 평면을 건드리다 참조가 끊기는 사고를 막는다.",
+    "@aws-cdk/core:defaultCrossStackReferences": "strong",
+
+    "ugrp:region": "ap-northeast-2",
+    "ugrp:shardCount": 20,
+    "ugrp:experiment": "grid-v1"
+  }
+}

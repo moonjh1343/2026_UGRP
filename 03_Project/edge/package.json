@@ -1,0 +1,14 @@
+{
+  "name": "@ugrp/edge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "정책 서빙 평면 — CloudFront Function + Lambda@Edge",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test-edge.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

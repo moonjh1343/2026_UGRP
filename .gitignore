@@ -29,6 +29,10 @@ node_modules/
 __pycache__/
 *.pyc
 
+# 에이전트 로컬 설정 — 권한 허용 목록은 사람마다 다르고 절대 경로가 섞인다.
+# 공유할 설정은 settings.json에 둔다(이쪽은 추적한다).
+**/.claude/settings.local.json
+
 # OS
 Thumbs.db
 Desktop.ini

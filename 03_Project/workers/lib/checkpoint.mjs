@@ -71,4 +71,20 @@ export class Checkpoint {
     this.done.add(cellId)
     await appendFile(this.donePath, JSON.stringify({ cellId, ...summary }) + '\n')
   }
+
+  /**
+   * 실행 시점에 새로 잡은 캘리브레이션. experiment.json은 재개 시 덮어쓰지 않는 것이
+   * 규칙이라 거기 넣을 수 없고, 그렇다고 빠뜨리면 "이 실행의 부하 수준이 실제로 VU
+   * 몇이었나"가 사라진다 — 셀 정의의 일부다.
+   *
+   * CloudCheckpoint에도 같은 이름의 메서드가 있어서 run.mjs가 분기하지 않는다.
+   */
+  async recordCalibration(payload) {
+    await writeFile(`${this.dir}/calibration.observed.json`, JSON.stringify(payload, null, 2) + '\n')
+  }
+
+  /** 로컬은 행마다 즉시 append하므로 버릴 버퍼가 없다. 인터페이스를 맞추기 위한 것이다. */
+  discardPending() {
+    return 0
+  }
 }

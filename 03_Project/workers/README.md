@@ -37,10 +37,74 @@ node run.mjs --name pilot --reps 30 --loads idle --types content
 | `lib/interactions.mjs` | 유형별 결정적 상호작용 시퀀스 (INP 유발) |
 | `lib/measure.mjs` | 한 셀 1회 측정 — 스로틀링, 캐시 상태 통제, 비콘 조인 |
 | `lib/stats.mjs` | 강건 통계 · MAD 이상치 제거 · 5단계 판정식 |
-| `lib/checkpoint.mjs` | JSONL 체크포인트 (append-only) |
+| `lib/checkpoint.mjs` | JSONL 체크포인트 (append-only) — 로컬 |
+| `lib/cloudCheckpoint.mjs` | S3 + DynamoDB 체크포인트 — AWS |
+| `lib/shard.mjs` | 그리드 샤딩 규칙 (부하 수준별 · 비용 균형) |
+| `lib/loadControl.mjs` | 원격 부하 제어 · 캘리브레이션 · 부하 이탈 감시 |
 | `lib/env.mjs` | 브라우저·Node·Next·정책 버전과 시드 기록 |
 | `run.mjs` | factorial 수집 실행기 |
 | `verify-variance.mjs` | 5단계 합격 기준 검사 |
+| `quarantine.mjs` | 오염 구간 표시 · 재수집 등록 |
+| `test-cloud-checkpoint.mjs` | `npm run test:checkpoint` — 가짜 AWS 클라이언트로 검증 |
+
+## 로컬이냐 클라우드냐는 환경변수가 정한다
+
+`run.mjs`는 같은 코드로 양쪽을 돈다. 갈리는 지점은 세 개뿐이고 전부 환경변수다.
+
+| 환경변수 | 없을 때 (로컬) | 있을 때 (AWS) |
+|---|---|---|
+| `LOAD_CONTROL_URL` | 부하를 프로세스 안에서 돌린다. 저장된 캘리브레이션 사용 | 별도 태스크를 HTTP로 제어하고, VU를 **새로 이진 탐색**한다 |
+| `UGRP_RESULTS_BUCKET` + `UGRP_CHECKPOINT_TABLE` | `runs/<이름>/`에 JSONL | S3 객체 + DynamoDB 완료 표시 |
+| `--shard-index/--shard-count` | 전체 그리드(또는 필터) | 자기 몫만 |
+
+둘 중 하나만 준 경우는 거부한다 — 결과와 완료 표시가 다른 곳에 남으면 재개가 성립하지 않는다.
+
+### 클라우드 체크포인트가 지키는 것
+
+- **S3 먼저, DynamoDB 나중.** 반대로 하면 "완료 표시는 됐는데 결과가 없는" 셀이 생기고,
+  재개해도 건너뛰므로 영영 빈다. 지금 순서에서 중간에 죽으면 결과만 남고 표시가 없어
+  그 셀을 다시 잰다 — 같은 (셀, 반복)이 두 벌 생기지만 `io.load_runs()`가 최신만 남긴다.
+- **행이 아니라 셀 단위로 올린다.** 행마다 PUT하면 샤드당 15,600 객체가 된다.
+- 키는 `experiment=<e>/dt=<날짜>/shard=<n>/<셀>.jsonl` — Glue/Athena가 파티션으로 읽는다.
+  `cellId`의 `|`와 `n/a`의 슬래시는 `_`로 바꾼다(안 그러면 S3에서 디렉터리가 갈린다).
+- 실험 메타데이터는 DynamoDB와 **S3 양쪽에** 쓴다. `aws s3 sync`로 받은 데이터에 브라우저·
+  Next 버전이 딸려오지 않으면 재현성 요구사항이 지켜지지 않는 것과 같다.
+
+### 학습 쪽으로 가져오기
+
+```bash
+aws s3 sync s3://<버킷>/experiment=<실험>/ 03_Project/workers/runs/<실험>/
+cd 03_Project/training && python scripts/train.py --runs <실험> --distill
+```
+
+`io.load_runs()`는 `results.jsonl`이 없으면 하위 디렉터리의 `*.jsonl`을 전부 읽는다.
+클라우드 실행에는 `done.jsonl`이 없지만 문제가 없다 — S3 객체는 셀이 끝날 때 한 번에
+쓰이므로, 객체가 있다는 것 자체가 그 셀의 반복이 모두 수집됐다는 뜻이다.
+
+## 수집 중에는 이 머신에서 아무것도 돌리지 마라
+
+배경 부하는 외생이어야 한다. 그런데 측정과 같은 머신에서 CPU를 쓰면 — 학습,
+빌드, 타입체크, 심지어 무거운 스크립트 하나 — `idle` 셀의 "배경 부하 없음"이
+사실이 아니게 된다. 부하 생성기로 통제한 축을 옆에서 뚫는 셈이라, 그 시간대
+행은 어느 부하 수준에도 속하지 않는다.
+
+이미 오염시켰다면 지우지 말고 **시간 창으로 표시**한다:
+
+```bash
+node quarantine.mjs --name <실험> --from <ISO> --to <ISO> --reason "..."
+node quarantine.mjs --name <실험>                 # 현재 상태
+node quarantine.mjs --name <실험> --requeue       # 수집이 멈춘 뒤에만
+```
+
+- 창은 `runs/<실험>/quarantine.json`에 쌓이고, 학습 쪽 `io.load_runs()`가 이걸
+  읽어 해당 행을 적재에서 뺀다(경고와 함께). 재수집 여부와 무관하게 걸러진다.
+- 셀 id가 아니라 시간 창인 이유: 재수집한 행은 ts가 더 나중이라 창 밖이다.
+  셀 단위로 걸렀다면 새로 잰 것까지 같이 버려진다.
+- `--requeue`는 생존 반복이 `--min-reps`(기본 20) 미만인 셀만 `done.jsonl`에서
+  뺀다. 30회 중 1회 걸린 셀을 통째로 다시 재는 것도 낭비다.
+- `--requeue`는 수집이 도는 중이면 거부한다. `done.jsonl`은 러너가 시작할 때
+  메모리로 읽고 그 뒤로는 append만 하므로, 도는 중에 지우면 이번 실행에 반영되지
+  않고 나중 append로 되살아난다.
 
 ## 판정식
 

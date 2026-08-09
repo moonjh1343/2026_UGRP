@@ -6,10 +6,13 @@
   "description": "적응형 렌더링 연구 측정 워커 — CDP 스로틀링, 상호작용 주입, factorial 수집",
   "scripts": {
     "verify": "node verify-variance.mjs",
+    "test:checkpoint": "node test-cloud-checkpoint.mjs",
     "collect": "node run.mjs",
     "calibrate": "node ../load/calibrate.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1106.0",
+    "@aws-sdk/client-s3": "3.1106.0",
     "playwright": "1.57.0"
   }
 }

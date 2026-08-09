@@ -4,9 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-Research repository with one implemented component: the SUT at `03_Project/apps/benchmark/` (Next.js). Everything else is planning material, most of it untracked (binaries are gitignored — see the layout section).
+Every plane below is implemented and tracked — SUT, load generator, measurement workers, CDK
+infrastructure, edge serving plane, training pipeline. What is missing is **data**: stage 6
+collection has only run a pilot slice, so the tree the policy actually serves is still the
+`v0-unfitted` placeholder.
 
-All commands run from `03_Project/apps/benchmark/`:
+| 단계 | 상태 |
+|---|---|
+| 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
+| 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
+| 6 factorial 수집 | 파일럿뿐 — `workers/runs/pilot-low-idle/` (600셀 슬라이스 중 17셀) |
+| 7 학습 파이프라인 | 배선 완료, 학습된 모델 없음 (`policy/model/tree.v0.json` = `v0-unfitted`) |
+
+Anything under `training/out/` is a smoke-test artifact until stage 6 finishes —
+`eval_report.json` currently scores n=2 conditions. Do not read it as a result.
+
+All commands in this section run from `03_Project/apps/benchmark/`:
 
 ```bash
 npm run build && npm start     # 측정은 프로덕션 빌드로만. dev 서버는 요청 시 컴파일한다
@@ -25,14 +38,25 @@ Verification scripts require a running server. Each gates one implementation sta
 | `npm run check:determinism` | 페이로드가 바이트 단위로 동일한가 | — |
 | `npm run analyze:routes` | 모드별 번들 KB 룩업 테이블 생성 (→ 재빌드) | — |
 | `npm run measure:render` | `C_render(m)` 반복 집계 | — |
+| `npm run inspect:graph` | 모드별 클라이언트 그래프 내용 (Islands에 트리가 없어야 함) | — |
+| `npm run report:bundles` | 모드별 HTML·JS 전송량 | — |
 
-Stage 5 lives outside the app, in its own packages (`npm install` in each):
+Stage 5 lives outside the app. `workers/` has its own `package.json` (`npm install` there);
+`load/` has no dependencies and runs on plain node.
 
 ```bash
-cd 03_Project/load    && node calibrate.mjs            # 목표 CPU → VU 이진 탐색
-cd 03_Project/workers && node verify-variance.mjs      # 5단계 합격 기준
-cd 03_Project/workers && node run.mjs --name pilot     # factorial 수집 (재개 가능)
+cd 03_Project/load && node calibrate.mjs               # 목표 CPU → VU 이진 탐색
+cd 03_Project/workers && npm install
+node verify-variance.mjs --reps 30 --types content,dashboard,form   # 5단계 합격 기준
+node run.mjs --name pilot --reps 30 --loads idle --types content    # 한 슬라이스만 수집
+node diagnose-tail.mjs --type content                  # 이상치 제거율이 튀는 원인 진단
+npm run test:checkpoint                                # 클라우드 체크포인트 (가짜 AWS 클라이언트)
 ```
+
+There is no per-test runner here — **the grid is the test suite**, and narrowing it is how you
+run one case: `run.mjs` takes `--devices --networks --loads --types --routes --modes --cache
+--reps --warmup --seed`, plus `--shard-index/--shard-count`. `--skip-stale` is a verification
+escape hatch, not a collection option (each `stale` rep costs ~62s and that cost is the point).
 
 k6 is not installed in this environment; `load/generator.mjs` is the local stand-in and reads
 the same `load/profile.json` as the k6 deployment script.
@@ -53,7 +77,11 @@ cd 03_Project/training
 pip install -r requirements.txt
 python scripts/fetch_routes.py     # route snapshot — needs the app server up, doesn't disturb it
 python scripts/train.py --distill  # load collected runs → label → train → evaluate → distill
+python scripts/train.py --runs pilot-low-idle --distill --out out/pilot   # 한 실험만
 ```
+
+It runs on partial data on purpose — too few samples produces a warning, not a failure, so you
+never have to wait for stage 6 to finish to find out the pipeline is broken.
 
 Parallel collection infrastructure is a CDK app at `03_Project/infra/` (`npm run synth` works
 without AWS credentials). The full grid is 813 hours serial; 20 shards bring it to 40.7. A shard
@@ -66,9 +94,19 @@ lab path) and why.
 
 ```bash
 cd 03_Project/infra && npm install
+npm run typecheck
 npm run synth                      # no credentials needed
 npx cdk synth -c ugrp:shardCount=40
 ```
+
+**`run.mjs` is one binary for both worlds; three environment variables decide which.**
+`LOAD_CONTROL_URL` switches the load generator from in-process (stored calibration) to a
+remote task whose VU count is re-searched at run time — a VU count calibrated on one machine
+does not mean the same load on Fargate. `UGRP_RESULTS_BUCKET` + `UGRP_CHECKPOINT_TABLE` switch
+JSONL-under-`runs/` to S3 + DynamoDB, and supplying only one of the pair is rejected: results
+and done-markers in different places means resume is not resume. Shard flags do the rest.
+Keeping this in env vars rather than a separate cloud runner is what makes the local pilot and
+the 20-shard run the same experiment.
 
 The serving plane is two stacks deployed in that order: `ServingOrigin` (public ALB + SUT in
 `ap-northeast-2`, `-c ugrp:serveOrigin=true`) then `Serving` (CloudFront + Lambda@Edge in
@@ -95,8 +133,6 @@ the swap itself is not — it needs a rebuild and restart, which kills a running
 
 Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
 
-Working language is Korean. Documents, comments, and discussion are in Korean; keep new prose in Korean unless asked otherwise.
-
 ## What the project is
 
 **Context-adaptive rendering mode selection.** Web frameworks fix the rendering mode (CSR/SSR/SSG/ISR/Streaming SSR/Islands) per route at build time. This research treats the optimal mode as a *function of runtime environment* — client device tier, network quality, and instantaneous server load — and learns a policy that picks the mode per request/session.
@@ -113,15 +149,16 @@ These were argued for in the proposal. Do not silently re-litigate them; if you 
 - **Surrogate regression + argmin, not direct classification.** The model predicts cost `Ĵ(x, m)` per mode and the policy takes the argmin. Classification was rejected because it requires hand-defined labels and cannot express "the modes are close enough that switching isn't worth it." Mode switching has fixed costs (cache fragmentation), so the margin between top-1 and top-2 predictions is load-bearing.
 - **λ is a shadow price, not a hyperparameter.** The QoE-vs-server-cost tradeoff is reformulated as constrained optimization (minimize QoE cost subject to `E[ServerCost] ≤ B`), with λ adjusted online by dual ascent.
 - **Labels are z-score normalized per route.** Skipping this makes the model learn "heavy page = bad" and destroys the between-mode signal that is the actual target.
-- **Full-factorial lab collection to sidestep the counterfactual problem.** Lab conditions are reproducible, so every mode is measured under the same condition vector — a request is not limited to one observed treatment. Grid: device tier (4) × network (5) × route (25) × server load (4) × mode (5) = 10,000 cells, 30 reps each. Field randomization (5–10% of traffic, propensity logged) supplies unbiased data for off-policy evaluation.
+- **Full-factorial lab collection to sidestep the counterfactual problem.** Lab conditions are reproducible, so every mode is measured under the same condition vector — a request is not limited to one observed treatment. Grid: device tier (4) × network (5) × server load (4) = 80 conditions, times the per-route feasible modes `Σ|M(r)| = 110` plus the SSG cache-state axis (10 SSG routes × 2 extra states) — `80 × (110 + 20) = 10,400` cells, 30 reps each. Mode is not a free 5-way factor: `M(r)` excludes SSG on dashboard/form/personalized, and a policy that folds an infeasible mode into a feasible one silently is unusable as a baseline, so `decide()` records the fallback as `x-decision-reason: infeasible` instead. Field randomization (5–10% of traffic, propensity logged) supplies unbiased data for off-policy evaluation.
 - **Background server load must be exogenous.** The render mode itself changes server load, which is also a feature. Load is pinned by a k6 generator with autoscaling disabled and `desiredCount` fixed; a single measurement request rides on top.
 - **In-process edge inference only.** A depth-5 tree distilled from the LightGBM ensemble is evaluated inside Lambda@Edge (~50KB JSON). A SageMaker endpoint in the request path would add tens of ms and cancel out the improvement it is measuring. Target overhead: TTFB increase < 2 ms.
 - **Server-state features are intentionally stale (~30s).** Load doesn't swing per-second, and a DynamoDB round-trip per request costs more than the freshness is worth.
 - **ML never decides SEO or correctness.** Crawler UAs and payment/auth routes are hard-pinned to SSR. A circuit breaker reverts all traffic to the default mode (Streaming SSR) on hydration-error or 5xx spikes.
 
-## Architecture to be built
+## Architecture
 
-Five planes, all defined in AWS CDK (TypeScript):
+Five planes as specified by the proposal. Read this list as the *target*; the subsection after
+it records where the built system deliberately departs from it.
 
 1. **SUT** — Next.js App Router on ECS Fargate behind ALB + CloudFront, implementing all five render modes in one codebase. Task cpu/memory are experiment variables. ElastiCache holds mode-keyed caches; DynamoDB holds session profiles and bandit state.
 2. **Client measurement** — AWS Batch/Fargate Playwright workers driving CDP (`Emulation.setCPUThrottlingRate`, `Network.emulateNetworkConditions`) for ~95% of cells, real multi-region workers for true RTT (origin pinned to `ap-northeast-2`), EC2 + `tc`/netem where kernel-level control is needed, and Device Farm for a ~5% real-device calibration subset.
@@ -132,6 +169,30 @@ Five planes, all defined in AWS CDK (TypeScript):
 Orchestration is Step Functions Distributed Map over the cell grid, with per-cell checkpointing in DynamoDB so a run can be stopped and resumed.
 
 **The correlation-ID join is the integrity-critical path.** The render decision happens at the edge and the measurement happens in the browser; if those two records can't be joined, the dataset is worthless. Treat any change touching it accordingly.
+
+### Where the built system departs from that list
+
+Each of these was argued for in the sub-README named beside it. Do not "fix" one back toward
+the proposal without reading that argument — and do not go looking for the service: it is not
+deployed anywhere.
+
+- **No SageMaker.** Training is a local Python package (`training/`, LightGBM + custom pairwise objective), and distillation writes `out/tree.json` for a manual copy into `policy/model/`. Processing → HPO → Model Registry buys nothing while the pipeline is being debugged against a pilot slice.
+- **No Firehose/Parquet in the lab path.** Workers write NDJSON straight to S3, one object per cell (`experiment=/dt=/shard=/<cell>.jsonl`, ~10k objects total), and Athena reads that as-is. Firehose → Parquet is the *field* path (proposal §5.4) and is unbuilt. `infra/README.md`
+- **No ElastiCache, no bandit state.** Mode-keyed caching is Next's own ISR cache; the single DynamoDB table holds cell checkpoints, not session profiles. The bandit extension is month-6 work.
+- **No AppConfig.** The distilled tree is baked into the edge bundle and model replacement is a deploy; Lambda@Edge has no environment variables to point at AppConfig with, and a fetch on cold start would sit in the request path. Fast rollback is the circuit breaker's job. `edge/README.md`
+- **Decision runs at origin-request, not viewer-request.** Cache hits have nothing to decide. `edge/README.md`
+- **Lab collection has no ALB and no CloudFront.** A CDN in front would erase the cache-state axis the grid exists to observe. `infra/README.md`
+- **`ServerCost` in the labels is partly unmeasured.** The `missRate` formula is replaced by observed render occurrence (background load deliberately avoids the measured routes, so `rps_r` is meaningless there), per-row `serverRenderCpuUs` is replaced by an N-rep mean because of timer quantization, and `C_serve`/`C_store` are **0 — not approximated, uninstrumented**. `training/README.md`
+
+## Failures that pass silently
+
+The expensive bugs in this repo do not throw. They produce a plausible number and a green
+check. The full lists live in the sub-READMEs; these four span more than one package:
+
+- **Classifying headless Chrome as a bot.** Every worker request hard-pins to SSR and `check:policy` passes while comparing ssr against ssr. This actually happened on the first stage-4 run.
+- **CDP throttling does not change Client Hints.** Unless workers inject `x-cell-device-tier`/`x-cell-effective-type`, the device and network features are constant across the whole lab dataset — the two axes the model exists to learn.
+- **Feature-order drift between `policy/features.ts` and `training/config.py`.** Train-serve skew with no error; `surrogate.ts`'s `x[cur.feature] ?? 0` reads a missing feature as 0. `npm run check:tree` is the gate — run it before copying any tree into `policy/model/`.
+- **A floating Promise for the server-state refresh.** Cancelled after the response returns, so the cache stays empty and every server-state feature is 0, forever, without an error. Use `event.waitUntil`.
 
 ## Reproducibility requirements
 

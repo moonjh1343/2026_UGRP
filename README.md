@@ -40,13 +40,19 @@
 
 AWS CDK로 정의된 5개 평면. 서버 환경과 클라이언트 환경을 각각 독립적으로, 재현 가능하게 조절하는 것이 핵심 요구사항이다.
 
-| 평면 | 구성 |
-|---|---|
-| SUT | ECS Fargate의 Next.js(App Router) — 5개 모드를 단일 코드베이스로 구현, task 스펙이 실험 변수 |
-| 클라이언트 측정 | AWS Batch + Playwright/CDP 에뮬레이션(95%), 5개 리전 실측 RTT, Device Farm 실기기 보정(5%) |
-| 부하 주입 | Fargate Spot의 k6 — 목표 CPU까지 VU 이진 탐색 캘리브레이션 |
-| 데이터 | web-vitals → Kinesis Firehose → S3(Parquet) → Glue/Athena |
-| 학습·서빙 | SageMaker → Model Registry → AppConfig → Lambda@Edge |
+| 평면 | 제안서 설계 | 구현된 것 |
+|---|---|---|
+| SUT | ECS Fargate의 Next.js(App Router) — 5개 모드를 단일 코드베이스로 구현, task 스펙이 실험 변수 | 완료. 랩 경로에는 ALB·CloudFront를 두지 않는다 |
+| 클라이언트 측정 | AWS Batch + Playwright/CDP 에뮬레이션(95%), 5개 리전 실측 RTT, Device Farm 실기기 보정(5%) | Playwright/CDP 워커 완료. 실측 RTT·Device Farm은 미구현 |
+| 부하 주입 | Fargate Spot의 k6 — 목표 CPU까지 VU 이진 탐색 캘리브레이션 | 완료. 로컬에는 같은 프로필을 읽는 Node 생성기 |
+| 데이터 | web-vitals → Kinesis Firehose → S3(Parquet) → Glue/Athena | 랩 경로는 워커가 S3에 NDJSON 직접 기록. Firehose는 필드 경로용으로 미구현 |
+| 학습·서빙 | SageMaker → Model Registry → AppConfig → Lambda@Edge | 로컬 LightGBM → 증류 트리를 엣지 번들에 굽는다. SageMaker·AppConfig 없음 |
+
+**세 갈래의 이탈은 의도된 것이고 각 하위 `README.md`에 근거가 있다.** 랩 수집 경로의 CDN은
+캐시 상태 축(miss/hit/stale)을 관측하려고 만든 실험 변수를 교란한다. Lambda@Edge는
+환경변수를 쓸 수 없어 AppConfig를 가리킬 방법이 없고, 콜드 스타트마다 요청 경로에 왕복이
+얹힌다 — 모델 교체는 배포로 처리하고 즉시 대응은 서킷 브레이커가 맡는다. SageMaker는
+파이프라인을 파일럿 슬라이스로 디버깅하는 동안에는 얻는 것이 없다.
 
 ## 저장소 구성
 
@@ -54,16 +60,49 @@ AWS CDK로 정의된 5개 평면. 서버 환경과 클라이언트 환경을 각
 adaptive-rendering-research-proposal.md       연구 제안서 (전체 명세)
 CLAUDE.md                                     Claude Code 작업 가이드
 03_Project/
-└── docs/benchmark-app-design.md              벤치마크 앱(SUT) 구조 설계
+├── docs/benchmark-app-design.md              벤치마크 앱(SUT) 구조 설계
+├── apps/benchmark/                           SUT — 5개 모드를 단일 컴포넌트 정의로 제공
+│   └── policy/                               결정 계층. 앱을 임포트하지 않는다 (엣지로 떨어져 나간다)
+├── load/                                     배경 부하 — k6 스크립트 + 로컬 Node 생성기, 공용 profile.json
+├── workers/                                  Playwright 측정 워커. lib/grid.mjs·lib/shard.mjs는 실험 정의
+├── infra/                                    AWS CDK — 네트워크·데이터·샤드·오케스트레이션·서빙
+├── edge/                                     정책 서빙 평면 (CloudFront Function + Lambda@Edge)
+└── training/                                 학습 파이프라인 (Python, LightGBM → 깊이 5 트리 증류)
 ```
 
-설계 판단의 근거는 제안서에, 작업 시 지켜야 할 제약은 `CLAUDE.md`에 정리되어 있다.
+각 디렉터리에 `README.md`가 있고, 거기에 **왜 그렇게 했는지와 손대기 전에 알아야 할 함정**이
+정리되어 있다. 설계 판단의 근거는 제안서에, 작업 시 지켜야 할 제약은 `CLAUDE.md`에 있다.
 
 > 연구계획서·참고 논문 등 문서 바이너리(PDF/DOCX/PPTX)는 저장소 용량 문제로 `.gitignore` 처리되어 있어 로컬에만 존재한다.
 
 ## 현재 상태
 
-연구 계획 수립 완료. 구현은 시작 전이며, `03_Project/`가 구현 대상 디렉토리다.
+배선은 끝났고 **데이터가 없다.** 다섯 평면이 모두 구현·검증되었지만 랩 전수 수집은
+파일럿 슬라이스까지만 돌았고, 따라서 정책이 서빙하는 트리는 아직 학습 전 자리표시자
+(`v0-unfitted`)다.
+
+| 단계 | 상태 |
+|---|---|
+| 1 골격 — 5모드 단일 컴포넌트 그래프 | 완료 (`check:dom` — 모드별 최종 DOM 동일) |
+| 2 계측 — 상관 ID·비콘·서버 상태 | 완료 (`check:join` — 서버 레코드 ↔ 클라이언트 비콘 조인) |
+| 3 유형 확대 — 5유형 × 5인스턴스 = 25 라우트 | 완료 (`check:divergence`) |
+| 4 결정 계층 — 정책 플러그인·가드 체인 | 완료 (`check:policy` — 추론 오버헤드가 2ms 예산의 1% 수준) |
+| 5 부하·측정 워커 | 완료 (n=30에서 반복 노이즈 < 모드 간 차이) |
+| 6 랩 전수 수집 (10,400셀 × 30반복) | **진행 중 — 파일럿뿐** |
+| 7 학습·증류 파이프라인 | 배선 완료, 학습된 모델 없음 |
+
+### 지금까지 나온 것
+
+n=30 재측정에서 확실한 것은 두 가지다. **CSR은 모든 유형에서 명확히 열위**이고(3G에서 추가
+왕복이 지배적), **SSG가 가능한 유형에서는 큰 폭으로 우세**하다. 나머지 유형에서는 상위 2~3개
+모드가 반복 노이즈 안에 있다 — 측정 실패가 아니라 참인 발견이고, **마진 기반 폴백 τ가 필요한
+이유의 실측 근거**다. 전환에는 캐시 파편화라는 고정비가 있으므로 예측 차가 τ 미만이면
+전환하지 않는 것이 옳다.
+
+부수적으로 얻은 것: n=8의 중앙값은 믿을 수 없었다. 콘텐츠형은 n=8과 n=30의 값이 크게
+어긋났고(대시보드·폼은 거의 일치), 제안서 §5.2가 셀당 30회를 규정하는 이유가 이것이다.
+
+### 전체 일정 (제안서 기준)
 
 | 기간 | 활동 |
 |---|---|
@@ -73,3 +112,14 @@ CLAUDE.md                                     Claude Code 작업 가이드
 | 4개월 | 서로게이트 모델 학습·튜닝, 오프라인 평가, 증류 |
 | 5개월 | Lambda@Edge 추론 구현, 필드 로그 수집, 오프폴리시 평가 |
 | 6개월 | 온라인 A/B, 밴딧 확장, 세그먼트 분석, 논문 작성 |
+
+## 실행
+
+```bash
+cd 03_Project/apps/benchmark
+npm install && npm run build && npm start     # 측정은 프로덕션 빌드로만 한다
+```
+
+검증 스크립트(`check:dom`·`check:join`·`check:divergence`·`check:policy`)와 수집·학습
+명령은 `CLAUDE.md`와 각 디렉터리 `README.md`에 있다. 전체 그리드는 단일 프로세스 직렬로
+813시간이라, 수집은 `workers/run.mjs`를 조건으로 좁혀 돌리거나 CDK 샤드로 병렬화한다.

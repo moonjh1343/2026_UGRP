@@ -1,0 +1,10 @@
+# 리눅스 컨테이너 안에서 해석되는 파일은 줄바꿈이 LF여야 한다.
+#
+# 이 저장소는 Windows에서 작업하고 core.autocrlf=true라, .gitattributes가 없으면
+# 체크아웃 때 이 파일들이 CRLF가 된다. push-images.sh의 셔뱅은 그 순간
+# `#!/usr/bin/env bash\r`가 되어 "bad interpreter" 로 죽고, Dockerfile의 줄
+# 연속(\)은 뒤에 \r이 붙어 다음 줄과 이어지지 않는다.
+#
+# 지금 작업 트리는 LF라 동작하지만, 새로 clone하면 깨진다.
+*.sh        text eol=lf
+Dockerfile  text eol=lf

@@ -108,6 +108,30 @@ npm run deploy -- --all
 스택을 아예 만들지 않는 쪽을 골랐다. 네트워크·데이터 평면은 다이제스트 없이 합성되므로
 구조 검증은 그대로 된다.
 
+### 워커 이미지를 바꿀 때는 Orchestration을 먼저 지운다
+
+이미 배포된 스택에서 **워커 다이제스트만 갈아끼우는 배포는 실패한다.**
+
+```
+Update canceled. Cannot update export Ugrp-grid-v1-Shards:ExportsOutputRefWorkerTask01…
+as it is in use by Ugrp-grid-v1-Orchestration.
+```
+
+Orchestration의 `EcsRunTask`가 워커 태스크 정의 ARN을 export로 소비하는데, 이미지가
+바뀌면 태스크 정의가 새로 만들어져 그 export 값이 바뀐다. CloudFormation은 **사용 중인
+export의 값 변경을 거부한다.** `cdk.json`의 `defaultCrossStackReferences: strong`이
+설계대로 동작한 것이다 — 소비 중인 참조가 끊기는 사고를 막는 대신 이 대가를 치른다.
+두 스택을 한 번에 배포해도 소용없다(같은 트랜잭션이 아니다).
+
+```bash
+npx cdk destroy Ugrp-grid-v1-Orchestration --force -c …   # 상태 기계뿐이라 잃을 것이 없다
+npx cdk deploy Ugrp-grid-v1-Shards Ugrp-grid-v1-Orchestration -c …
+```
+
+**상태 기계 ARN이 바뀐다.** 진행 점검 스크립트에 ARN을 박아 두었다면 함께 갱신한다.
+수집 데이터는 영향받지 않는다 — 결과와 체크포인트는 Data 스택에 있고, 같은 `--name`으로
+다시 실행하면 완료된 셀을 건너뛴다.
+
 ## 규모
 
 | 샤드 | 벽시계 | 샤드 스택 리소스 |

@@ -1,0 +1,40 @@
+# 빌드 컨텍스트(= 03_Project/)에서 제외할 것.
+#
+# **이 파일은 편의가 아니라 재현성 장치다.** 세 Dockerfile 모두 `COPY <dir>/ ./`로
+# 소스를 통째로 넣는데, 호스트의 node_modules가 컨텍스트에 있으면 그것이 이미지
+# 안에서 `npm ci`가 락파일대로 설치한 트리를 **덮어쓴다**. 그러면 이미지의 의존성이
+# "락파일이 규정한 것"이 아니라 "빌드한 사람 노트북에 있던 것"이 되고, 다이제스트는
+# 남지만 그 다이제스트를 소스에서 복원할 수 없다. 에러는 나지 않는다.
+#
+# 실제로 그렇게 만들어진 이미지를 한 번 푸시했다가 지웠다(2026-08-09).
+
+# 의존성 — 이미지 안에서 npm ci로 설치한다. 호스트 것이 들어오면 안 된다.
+**/node_modules
+
+# 빌드 산출물 — 이미지 안에서 다시 만든다.
+**/.next
+**/*.tsbuildinfo
+edge/dist
+edge/src/config.generated.js
+infra/cdk.out
+
+# 수집 데이터·학습 산출물. 이미지에 실험 결과를 굽지 않는다.
+workers/runs
+training/data
+training/out
+**/__pycache__
+**/*.pyc
+
+# 세 이미지(sut·worker·load) 중 무엇도 쓰지 않는 것들.
+# 여기에 의존하는 Dockerfile을 새로 만든다면 이 줄부터 지워야 한다.
+docs
+infra
+edge
+training
+
+# 에이전트 로컬 설정
+.claude
+
+# OS
+**/.DS_Store
+**/Thumbs.db

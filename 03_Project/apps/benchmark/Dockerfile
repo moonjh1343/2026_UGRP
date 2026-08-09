@@ -20,8 +20,13 @@ RUN npm ci
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# **순서가 중요하다 — 소스를 먼저 넣고 node_modules를 그 위에 얹는다.**
+# 반대로 하면 컨텍스트에 호스트 node_modules가 있을 때 그것이 deps 스테이지의
+# 락파일 설치본을 덮어쓴다(COPY는 디렉터리를 병합하며 같은 경로를 덮는다).
+# `.dockerignore`가 이미 막고 있지만, 그 파일 하나에 재현성을 걸지 않는다 —
+# 덮어써도 빌드는 성공하고 에러가 나지 않기 때문이다.
 COPY apps/benchmark/ ./
+COPY --from=deps /app/node_modules ./node_modules
 # 측정은 프로덕션 빌드로만 한다. dev 서버는 요청 시 컴파일해 첫 요청이 느리다.
 RUN npm run build
 

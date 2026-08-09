@@ -22,6 +22,12 @@ RUN cd workers && npm ci
 
 # 워커와 부하 생성기는 한 이미지에 함께 둔다 — run.mjs가 generator.mjs를 직접
 # 임포트하고, 로컬 실행과 같은 코드 경로를 쓰는 것이 곧 로컬/AWS 결과의 비교 가능성이다.
+#
+# **이 COPY는 `.dockerignore`에 의존한다.** 위의 npm ci가 먼저 도는 순서(레이어
+# 재사용 목적)라, 컨텍스트에 호스트 `workers/node_modules`가 있으면 여기서 그것이
+# 락파일 설치본을 덮어쓴다. `workers/runs/`의 수집 데이터도 함께 구워진다.
+# 순서를 바꾸지 않고 `.dockerignore`로 막는 쪽을 골랐으므로, 그 파일에서
+# `**/node_modules`·`workers/runs`를 지우면 이 이미지가 조용히 오염된다.
 COPY workers/ ./workers/
 COPY load/ ./load/
 

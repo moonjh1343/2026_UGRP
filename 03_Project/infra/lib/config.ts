@@ -86,18 +86,85 @@ export function requireDigests(d: Partial<ImageDigests>, stage: string): ImageDi
  * 같은 값으로 자기 몫을 계산한다.
  */
 export interface CollectionConfig {
+  /** 스택 이름 접두사. 인프라를 가리킨다. */
   experiment: string
+  /**
+   * 데이터 네임스페이스 — S3 프리픽스와 DynamoDB 파티션 키(`run.mjs`의 `--name`).
+   *
+   * **`experiment`와 분리해 둔다.** 붙여 두면 슬라이스를 따로 모으려고 이름을 바꿀 때
+   * VPC와 결과 버킷까지 새로 생긴다. 반대로 이름을 공유하면 슬라이스 행과 본 수집 행이
+   * 한 네임스페이스에 섞이는데, 그 사이에 이미지가 바뀌면(우리는 이미 네 번 바꿨다)
+   * 서로 다른 빌드의 행이 한 데이터셋에 남는다.
+   */
+  runName: string
   reps: number
   totalShards: number
   /** 조건 순서·샤드 배치 시드. 실험 메타데이터에 기록된다. */
   seed: string
+  /**
+   * 슬라이스 필터. 워커 command에 그대로 붙는다.
+   *
+   * 그리드를 좁히는 것은 **실험 정의**이므로 ad-hoc 인자가 아니라 컨텍스트로 받아
+   * cdk.json에 커밋한다(재현성 요구사항: 조건 그리드는 버전 관리되는 코드에 둔다).
+   */
+  filters: string[]
 }
 
 export const DEFAULT_COLLECTION: CollectionConfig = {
   experiment: 'grid-v1',
+  runName: 'grid-v1',
   reps: 30,
   totalShards: 20,
   seed: 'ugrp-2026',
+  filters: [],
+}
+
+/** `ugrp:filters`로 줄 수 있는 축. `run.mjs`의 플래그 이름과 같다. */
+const FILTER_KEYS = ['devices', 'networks', 'types', 'routes', 'modes', 'cache'] as const
+
+/**
+ * 슬라이스 필터를 command 플래그로 바꾼다.
+ *
+ * **`loads`는 받지 않는다.** 부하 축은 샤드 배정이 담당한다(샤드 하나가 부하 수준
+ * 하나). `run.mjs`는 샤드 플래그와 `--loads`를 함께 받으면 어느 쪽이 이기는지
+ * 모호해지므로 거부하는데, 그 거부가 태스크 시작 시점에 일어나면 배포는 성공한 뒤다.
+ * 여기서 미리 막는다.
+ */
+export function parseFilters(rawInput: unknown, stage: string): string[] {
+  if (rawInput == null) return []
+  // cdk.json의 context에 객체로 넣으면 객체로, `-c ugrp:filters={...}`로 주면 문자열로
+  // 온다 — ugrp:digests와 같은 사정이다.
+  let raw = rawInput
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw)
+    } catch {
+      throw new Error(`[${stage}] ugrp:filters 를 JSON으로 읽을 수 없다: ${raw}`)
+    }
+  }
+  if (typeof raw !== 'object' || raw == null || Array.isArray(raw)) {
+    throw new Error(`[${stage}] ugrp:filters 는 객체여야 한다 — 예: '{"types":"content,form"}'`)
+  }
+  const out: string[] = []
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k === 'loads') {
+      throw new Error(
+        `[${stage}] ugrp:filters 에 loads 를 넣을 수 없다 — 부하 축은 샤드 배정이 담당한다.\n` +
+          '  샤드 하나가 부하 수준 하나만 맡으므로, 부하를 좁히려면 shardCount 를 줄이는 것이\n' +
+          '  아니라 수집을 나눠 돌려야 한다(shardCount 최소는 부하 수준 수다).',
+      )
+    }
+    if (!(FILTER_KEYS as readonly string[]).includes(k)) {
+      throw new Error(
+        `[${stage}] ugrp:filters 의 '${k}' 는 알 수 없는 축이다. 가능: ${FILTER_KEYS.join(', ')}`,
+      )
+    }
+    if (typeof v !== 'string' || v.trim() === '') {
+      throw new Error(`[${stage}] ugrp:filters.${k} 는 비어 있지 않은 문자열이어야 한다`)
+    }
+    out.push(`--${k}`, v)
+  }
+  return out
 }
 
 /** 부하 수준 — grid.mjs의 LOADS와 같은 순서여야 한다. */

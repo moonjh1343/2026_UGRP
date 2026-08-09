@@ -213,11 +213,13 @@ export class ShardStack extends Stack {
         LOAD_CONTROL_URL: `http://load-${pad}.${NAMESPACE}:${LOAD_CONTROL_PORT}`,
       },
       command: [
-        '--name', collection.experiment,
+        '--name', collection.runName,
         '--reps', String(collection.reps),
         '--seed', collection.seed,
         '--shard-index', String(index),
         '--shard-count', String(collection.totalShards),
+        // 슬라이스 필터. 부하 축은 위의 샤드 배정이 담당하므로 여기에 --loads는 없다.
+        ...collection.filters,
       ],
     })
 

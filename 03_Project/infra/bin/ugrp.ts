@@ -20,6 +20,7 @@ import {
   CollectionConfig,
   ImageDigests,
   requireShardCount,
+  parseFilters,
 } from '../lib/config'
 
 const app = new App()
@@ -32,6 +33,15 @@ const env: Environment = {
 const collection: CollectionConfig = {
   ...DEFAULT_COLLECTION,
   experiment: app.node.tryGetContext('ugrp:experiment') ?? DEFAULT_COLLECTION.experiment,
+  /*
+   * 데이터 네임스페이스는 스택 이름과 따로 받는다. 슬라이스를 별도 이름으로 모아도
+   * VPC·결과 버킷은 그대로 재사용한다.
+   */
+  runName:
+    app.node.tryGetContext('ugrp:runName') ??
+    app.node.tryGetContext('ugrp:experiment') ??
+    DEFAULT_COLLECTION.runName,
+  filters: parseFilters(app.node.tryGetContext('ugrp:filters'), 'collection'),
   totalShards: requireShardCount(
     Number(app.node.tryGetContext('ugrp:shardCount') ?? DEFAULT_COLLECTION.totalShards),
     'collection',

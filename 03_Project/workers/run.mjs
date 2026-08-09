@@ -25,7 +25,7 @@ import { Checkpoint } from './lib/checkpoint.mjs'
 import { captureEnv } from './lib/env.mjs'
 import { cellId, expandGrid, loadCalibration, loadRouteTable, makeRng, shuffle } from './lib/grid.mjs'
 import { planShards } from './lib/shard.mjs'
-import { calibrateRemote, makeLoadVerifier, startRemoteLoad } from './lib/loadControl.mjs'
+import { calibrateRemote, makeLoadVerifier, resetRemoteLoad, startRemoteLoad } from './lib/loadControl.mjs'
 import { measureOnce } from './lib/measure.mjs'
 import { median, removeOutliers } from './lib/stats.mjs'
 
@@ -270,7 +270,29 @@ for (const [level, group] of byLoad) {
       continue
     }
     console.log(`\n[부하 ${level}] 원격 캘리브레이션 — 목표 CPU ${target}%`)
-    const cal = await calibrateRemote({ base: BASE, controlUrl: LOAD_CONTROL_URL, target })
+    /*
+     * **캘리브레이션은 실패할 수 있고, 실패가 곧 사람을 부를 일은 아니다.**
+     *
+     * 부하 태스크는 워커보다 오래 산다(desiredCount 고정). 앞선 워커가 죽었으면 부하는
+     * 그 워커가 마지막에 지시한 VU로 계속 돌고 있고, 그 상태에서 첫 탐침이 들어가면
+     * `setVus`가 수십 개 스트림을 정리하는 동안 제어 서버의 이벤트 루프가 굶어
+     * 응답이 늦는다. slice-b2의 3·4번째 시도가 정확히 이것으로 죽었다(2026-08-09).
+     *
+     * 그래서 (a) 시작 전에 부하를 0으로 되돌려 놓고, (b) 실패하면 잠깐 쉬고 다시 한다.
+     * 여기서 포기하면 샤드가 통째로 빠지고 — Parallel이 실행 전체를 실패시킨다.
+     */
+    let cal
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await resetRemoteLoad(LOAD_CONTROL_URL)
+        cal = await calibrateRemote({ base: BASE, controlUrl: LOAD_CONTROL_URL, target })
+        break
+      } catch (err) {
+        console.log(`  캘리브레이션 ${attempt}/3 실패: ${err.message}`)
+        if (attempt === 3) throw err
+        await new Promise((r) => setTimeout(r, 30_000))
+      }
+    }
     vus = cal.vus
     expectedCpuPct = cal.cpuPct
     remoteCalibration[level] = { ...cal, at: new Date().toISOString() }

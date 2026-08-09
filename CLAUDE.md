@@ -193,6 +193,7 @@ check. The full lists live in the sub-READMEs; these four span more than one pac
 - **CDP throttling does not change Client Hints.** Unless workers inject `x-cell-device-tier`/`x-cell-effective-type`, the device and network features are constant across the whole lab dataset — the two axes the model exists to learn.
 - **Feature-order drift between `policy/features.ts` and `training/config.py`.** Train-serve skew with no error; `surrogate.ts`'s `x[cur.feature] ?? 0` reads a missing feature as 0. `npm run check:tree` is the gate — run it before copying any tree into `policy/model/`.
 - **A floating Promise for the server-state refresh.** Cancelled after the response returns, so the cache stays empty and every server-state feature is 0, forever, without an error. Use `event.waitUntil`.
+- **Calibrating the load level on a short burst.** A fixed VU count pins *concurrency*, not CPU: throughput is `concurrency / (thinkTime + responseTime)`, and response time grows as the SUT saturates, so sustained CPU settles below what a 20-second window measures. Every load level in slice-b2 sat 12–16%p under its calibration. The number lands in `experiment.json`, `features.py` maps it onto every row of that level, and the load axis is then labelled with a CPU the server never had. `calibrateRemote` searches on bursts but records a **sustained** hold — the value the drift verifier compares against during measurement.
 
 ## Reproducibility requirements
 

@@ -43,8 +43,21 @@ export const TASK_SIZE = {
   sut: { cpu: 2048, memoryMiB: 4096 },
   /** Playwright 워커 — 브라우저가 메모리를 먹는다. */
   worker: { cpu: 2048, memoryMiB: 4096 },
-  /** k6 부하 생성기 — VU 수만큼 고루틴이라 CPU보다 메모리가 먼저 는다. */
-  load: { cpu: 1024, memoryMiB: 2048 },
+  /*
+   * 부하 생성기.
+   *
+   * k6라면 VU 수만큼 고루틴이라 CPU보다 메모리가 먼저 늘지만, 실제로 도는 것은
+   * `load/control.mjs`(Node)다. 단일 프로세스가 수십 개 동시 스트림의 본문을 읽으면서
+   * 자기 제어 API도 서빙하는데, 1 vCPU에서는 이벤트 루프가 굶어 `/vus`가 응답하지
+   * 못했다 — slice-b2의 high 샤드가 그렇게 네 번 죽었다(2026-08-09).
+   *
+   * 2 vCPU로 올려 GC와 네트워크 스레드가 이벤트 루프와 코어를 다투지 않게 한다.
+   * JS 스레드는 여전히 하나이므로 이것만으로 굶주림이 사라지지는 않는다 —
+   * 워커 쪽 타임아웃·재시도(`loadControl.mjs`의 `fetchJson`)가 진짜 방어선이다.
+   *
+   * Fargate는 2048 CPU에 최소 4096 MiB를 요구한다.
+   */
+  load: { cpu: 2048, memoryMiB: 4096 },
 } as const
 
 /**

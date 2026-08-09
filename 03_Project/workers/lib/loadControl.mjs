@@ -15,27 +15,55 @@
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * **제어 평면 요청에는 반드시 타임아웃이 있어야 한다.**
+ *
+ * `control.mjs`는 단일 Node 프로세스가 수십 개 동시 스트림의 본문을 읽으면서 자기
+ * 제어 API도 서빙한다. 이벤트 루프가 굶으면 `/vus` POST의 본문조차 읽지 못하고,
+ * 타임아웃이 없으면 undici 기본값 300초를 기다린 뒤 처리되지 않은 `fetch failed`로
+ * **워커 프로세스가 죽는다.** SUT의 `/api/internal/metrics`도 서버가 포화되면 같다.
+ *
+ * slice-b2가 이렇게 죽었다(2026-08-09). high 샤드가 캘리브레이션 중 네 번 크래시했고,
+ * Parallel이 나머지 세 샤드를 끌고 내려갔다. 로그의 5분 간격이 정확히 그 기본값이다.
+ *
+ * 응답이 늦은 것은 부하가 걸려 있다는 뜻이지 고장이 아니므로, 짧은 타임아웃으로
+ * 끊고 다시 물어본다. 끝까지 안 되면 그때 던진다 — 호출부가 판단할 수 있는 오류로.
+ */
+async function fetchJson(url, { method = 'GET', body, timeoutMs = 30_000, attempts = 3, what } = {}) {
+  let lastErr
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        cache: 'no-store',
+        ...(body === undefined
+          ? {}
+          : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return await res.json()
+    } catch (err) {
+      lastErr = err
+      // 마지막 시도가 아니면 잠깐 쉬고 다시. 이벤트 루프가 풀릴 시간을 준다.
+      if (i < attempts) await sleep(2000 * i)
+    }
+  }
+  throw new Error(`${what} 실패 (${attempts}회 시도): ${lastErr?.message ?? lastErr}`)
+}
+
 async function post(controlUrl, path, body) {
-  const res = await fetch(`${controlUrl}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`부하 제어 ${path} 실패: HTTP ${res.status}`)
-  return res.json()
+  // VU 변경은 이전 부하를 전부 정리하고서 응답한다 — 그만큼 넉넉하게 준다.
+  return fetchJson(`${controlUrl}${path}`, { method: 'POST', body, timeoutMs: 60_000, what: `부하 제어 ${path}` })
 }
 
 async function get(controlUrl, path) {
-  const res = await fetch(`${controlUrl}${path}`, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`부하 제어 ${path} 실패: HTTP ${res.status}`)
-  return res.json()
+  return fetchJson(`${controlUrl}${path}`, { what: `부하 제어 ${path}` })
 }
 
 /** SUT의 CPU 스냅샷. 조회 사이의 델타를 돌려주므로 첫 조회는 기준점 리셋이다. */
 async function snapshot(base) {
-  const res = await fetch(`${base}/api/internal/metrics`, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`메트릭 조회 실패: HTTP ${res.status}`)
-  return res.json()
+  return fetchJson(`${base}/api/internal/metrics`, { what: '메트릭 조회' })
 }
 
 /**
@@ -61,6 +89,26 @@ async function measureAt({ base, controlUrl, vus, settleMs, observeMs }) {
  * Fargate에서 다시 돌려야 하는 이유: `load/calibration.generated.json`의 값은
  * 18코어 머신에서 1코어를 할당한 기준이다. 태스크 크기가 다르면 VU→CPU 대응이
  * 통째로 달라지고, 그대로 쓰면 부하 수준이 그리드가 말하는 것과 다른 값이 된다.
+ *
+ * ------------------------------------------------------------------ 2단계 구조
+ *
+ * **짧은 버스트로 잰 VU→CPU 대응은 지속 상태에서 성립하지 않는다.**
+ *
+ * 고정 VU는 CPU를 고정하는 게 아니라 **동시성**을 고정한다. 닫힌 루프에서
+ * 처리율 = 동시성 / (thinkTime + 응답시간)이고, 서버가 포화에 가까워지면 응답시간이
+ * 늘어나 처리율이 내려가고 CPU도 함께 내려간다. 20초 관측창은 응답시간이 새 평형에
+ * 닿기 전의 과도 상태를 잡는다. 반면 측정은 셀당 수 분씩 돌아가므로 평형값을 본다.
+ *
+ * slice-b2에서 세 부하 수준 모두 지속 CPU가 버스트 캘리브레이션보다 12~16%p 낮았다
+ * (low 15.0 vs 27.4 · mid 51.3 vs 64.6 · high 74.5 vs 89.0). 리스너 누수와는 무관한
+ * 별개 원인이고, 이탈 감시가 셋 다 잡아냈다.
+ *
+ * 그래서 이진 탐색은 **이웃을 싸게 찾는 용도로만** 쓰고, 고른 VU를 몇 분 유지해
+ * 평형 CPU를 재고, 목표에서 벗어나면 VU를 비례 보정해 다시 유지한다. 기록에 남는
+ * `cpuPct`는 **지속 상태의 값**이다 — 이탈 감시가 측정 중에 비교하는 그 값이어야 한다.
+ *
+ * **이것은 측정 중 제어 루프가 아니다.** 전부 측정 시작 전에 끝나고, 그 뒤 VU는
+ * 얼린다. 부하가 측정 대상에 반응하면 외생성이 깨진다는 규칙은 그대로다.
  */
 export async function calibrateRemote({
   base,
@@ -70,6 +118,10 @@ export async function calibrateRemote({
   maxVus = 256,
   settleMs = 8000,
   observeMs = 20000,
+  /** 지속 확인 — 안정화 30초 + 관측 3분. 평형에 닿기에 충분하고 셀 하나 값보다 짧다. */
+  holdSettleMs = 30_000,
+  holdMs = 180_000,
+  holdRounds = 4,
   log = console.log,
 }) {
   if (target <= 0) return { vus: 0, cpuPct: 0, target, reached: true }
@@ -86,22 +138,90 @@ export async function calibrateRemote({
     m = await at(hi)
     log(`  캘리브레이션 탐침 VU=${hi} cpu=${m.cpuPct.toFixed(1)}%`)
   }
+
+  let burst = { vus: hi, cpuPct: m.cpuPct }
   if (m.cpuPct < target) {
-    log(`  경고: VU ${hi}(상한 ${maxVus})에서도 ${m.cpuPct.toFixed(1)}% — 목표 ${target}% 미달`)
-    return { vus: hi, cpuPct: m.cpuPct, target, reached: false }
+    log(`  경고: VU ${hi}(상한 ${maxVus})에서도 버스트 ${m.cpuPct.toFixed(1)}% — 목표 ${target}% 미달`)
+  } else {
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2)
+      const r = await at(mid)
+      log(`  캘리브레이션 이분 VU=${mid} cpu=${r.cpuPct.toFixed(1)}%`)
+      if (Math.abs(r.cpuPct - target) < Math.abs(burst.cpuPct - target)) burst = { vus: mid, cpuPct: r.cpuPct }
+      if (Math.abs(r.cpuPct - target) <= tolerance) break
+      if (r.cpuPct < target) lo = mid
+      else hi = mid
+    }
   }
 
-  let best = { vus: hi, cpuPct: m.cpuPct }
-  while (hi - lo > 1) {
-    const mid = Math.floor((lo + hi) / 2)
-    const r = await at(mid)
-    log(`  캘리브레이션 이분 VU=${mid} cpu=${r.cpuPct.toFixed(1)}%`)
-    if (Math.abs(r.cpuPct - target) < Math.abs(best.cpuPct - target)) best = { vus: mid, cpuPct: r.cpuPct }
-    if (Math.abs(r.cpuPct - target) <= tolerance) break
-    if (r.cpuPct < target) lo = mid
-    else hi = mid
+  // ---------------------------------------------------- 2단계: 지속 상태 확인
+  let vus = burst.vus
+  let best = null
+  let round = 0
+  while (round < Math.max(1, holdRounds)) {
+    round++
+    const h = await measureAt({ base, controlUrl, vus, settleMs: holdSettleMs, observeMs: holdMs })
+    log(
+      `  지속 확인 ${round}/${holdRounds} VU=${vus} cpu=${h.cpuPct.toFixed(1)}% ` +
+        `(목표 ${target}% · 버스트 ${burst.cpuPct.toFixed(1)}%)`,
+    )
+    if (best === null || Math.abs(h.cpuPct - target) < Math.abs(best.cpuPct - target)) best = h
+    if (Math.abs(h.cpuPct - target) <= tolerance) break
+
+    /*
+     * 비례 보정에 감쇠를 건다. 포화 근처에서 VU→CPU 기울기가 완만해지므로 순수
+     * 비례(target/cpu)로 밀면 넘겨 짚고 진동한다.
+     */
+    const scale = h.cpuPct > 0 ? target / h.cpuPct : 2
+    const next = Math.max(1, Math.min(maxVus, Math.round(vus * (1 + (scale - 1) * 0.7))))
+    if (next === vus) {
+      log(`  지속 확인 — VU ${vus}에서 보정할 여지가 없다 (상한 ${maxVus})`)
+      break
+    }
+    vus = next
   }
-  return { ...best, target, reached: Math.abs(best.cpuPct - target) <= tolerance }
+
+  const reached = Math.abs(best.cpuPct - target) <= tolerance
+  if (!reached) {
+    log(`  경고: 지속 상태 ${best.cpuPct.toFixed(1)}% — 목표 ${target}%에 ${holdRounds}회 안에 못 맞췄다`)
+  }
+  /*
+   * `cpuPct`는 지속값이다. 버스트값도 남긴다 — 둘의 차이가 이 태스크 크기에서
+   * 닫힌 루프가 얼마나 물러나는지의 기록이고, 사후에 부하 축을 해석할 때 쓴다.
+   */
+  return {
+    ...best,
+    target,
+    reached,
+    holdRounds: round,
+    holdMs,
+    burst: { ...burst },
+  }
+}
+
+/**
+ * 부하를 0으로 되돌린다. **캘리브레이션 전 위생 절차다.**
+ *
+ * 부하 태스크는 워커보다 오래 산다. 앞선 워커가 죽었다면 부하는 그 워커가 마지막에
+ * 지시한 VU로 계속 돌고 있고, 그 위에서 첫 탐침을 하면 두 부하가 겹친 값을 잰다 —
+ * 게다가 `setVus`가 수십 개 스트림을 정리하는 동안 제어 서버가 응답하지 못한다.
+ *
+ * 실패해도 던지지 않는다. 여기서 막히면 뒤따르는 캘리브레이션도 막히고, 재시도는
+ * 그쪽에서 세는 것이 맞다 — 위생 절차가 시도 횟수를 먹으면 진단이 흐려진다.
+ */
+export async function resetRemoteLoad(controlUrl, { log = console.log } = {}) {
+  try {
+    const before = await get(controlUrl, '/state').catch(() => null)
+    if (before && before.vus === 0) return { vus: 0, wasRunning: false }
+    if (before) log(`  부하 초기화 — 이전 워커가 남긴 VU ${before.vus}를 0으로 되돌린다`)
+    await post(controlUrl, '/vus', { vus: 0 })
+    // 정리된 요청이 SUT에서 빠져나갈 시간. 이걸 안 주면 첫 탐침이 잔열을 함께 잰다.
+    await sleep(5000)
+    return { vus: 0, wasRunning: Boolean(before && before.vus > 0) }
+  } catch (err) {
+    log(`  부하 초기화 실패(${err.message}) — 캘리브레이션에서 다시 시도한다`)
+    return { vus: null, wasRunning: null }
+  }
 }
 
 /**

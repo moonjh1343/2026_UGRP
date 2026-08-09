@@ -81,8 +81,16 @@ export class OrchestrationStack extends Stack {
        * 부족이나 이미지 풀 실패는 다시 시도하면 되는 종류다. 셀 단위 체크포인트가
        * 있으므로 재시도는 이미 잰 셀을 다시 재지 않는다.
        */
+      /*
+       * `States.TaskFailed`를 넣으면 안 된다. RUN_JOB 통합에서 컨테이너가 0이 아닌
+       * 코드로 끝나면 전부 이 오류로 오므로, 워커의 **의도된** 자진 정지까지 재시도
+       * 대상이 된다 — 위 문단이 하지 말자고 적어 둔 바로 그것이다.
+       *
+       * slice-b2에서 그렇게 됐다(2026-08-09). high 샤드가 부하 이탈로 스스로 멈췄고,
+       * 재시도가 3회 더 띄워 4샤드 × 40분을 태운 뒤 같은 이유로 죽었다.
+       */
       run.addRetry({
-        errors: ['ECS.AmazonECSException', 'ECS.LimitExceededException', 'States.TaskFailed'],
+        errors: ['ECS.AmazonECSException', 'ECS.LimitExceededException'],
         interval: Duration.minutes(2),
         maxAttempts: 3,
         backoffRate: 2,

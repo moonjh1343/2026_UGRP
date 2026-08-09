@@ -14,6 +14,9 @@
 # 빌드 산출물·의존성
 node_modules/
 .next/
+03_Project/infra/cdk.out/
+03_Project/edge/dist/
+03_Project/edge/src/config.generated.js
 
 # 수집 데이터. 코드가 아니라 실험 결과이고, 크기도 커진다.
 # 실험 메타데이터(experiment.json)까지 함께 빠지므로, 보관할 실행은

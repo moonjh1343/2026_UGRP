@@ -16,15 +16,11 @@
  */
 import { chromium } from 'playwright'
 import { loadRouteTable, makeRng, shuffle } from './lib/grid.mjs'
+import { arg } from './lib/args.mjs'
 import { measureOnce } from './lib/measure.mjs'
 import { mad, median, removeOutliers } from './lib/stats.mjs'
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
-
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const TYPE = arg('type', 'content')
 const REPS = Number(arg('reps', 30))

@@ -18,6 +18,7 @@
  */
 import { chromium } from 'playwright'
 import { startLoad, loadProfile } from '../load/generator.mjs'
+import { arg, list } from './lib/args.mjs'
 import { captureEnv } from './lib/env.mjs'
 import { loadCalibration, loadRouteTable, makeRng, shuffle } from './lib/grid.mjs'
 import { measureOnce } from './lib/measure.mjs'
@@ -25,11 +26,6 @@ import { median, removeOutliers, robustSd, seMedian, varianceVerdict } from './l
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
-const listArg = (name, fallback) => (arg(name, null)?.split(',') ?? fallback)
 
 const REPS = Number(arg('reps', 30))
 const WARMUP = Number(arg('warmup', 3))
@@ -37,7 +33,7 @@ const SEED = arg('seed', 'ugrp-2026')
 const DEVICE = arg('device', 'low') // CPU 4× — 스로틀링 없이는 모드 차이가 노이즈에 묻힌다
 const NETWORK = arg('network', '3g-fast')
 const LOAD = arg('load', 'idle')
-const TYPES = listArg('types', ['content', 'dashboard', 'form'])
+const TYPES = list('types', ['content', 'dashboard', 'form'])
 /** 합격 임계값 — 모드 간 폭이 반복 노이즈의 최소 2배여야 한다 */
 const THRESHOLD = Number(arg('threshold', 0.5))
 
@@ -114,10 +110,8 @@ try {
     )
 
     const samples = {}
-    const raw = {}
     for (const m of route.candidateModes) {
       samples[m] = []
-      raw[m] = { LCP: [], INP: [], TBT: [], TTFB: [] }
     }
     let failed = 0
     /*
@@ -149,9 +143,6 @@ try {
       timeline.push(r.wallMs)
       const s = score(r.metrics)
       if (Number.isFinite(s)) samples[cell.mode].push(s)
-      for (const k of Object.keys(raw[cell.mode])) {
-        if (Number.isFinite(r.metrics[k])) raw[cell.mode][k].push(r.metrics[k])
-      }
       if (++n % 20 === 0) process.stdout.write('.')
     }
     process.stdout.write('\n')
@@ -194,7 +185,6 @@ try {
       route,
       verdict,
       cleaned,
-      raw,
       failed,
       outliers,
       outlierRate,

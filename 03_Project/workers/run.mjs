@@ -21,6 +21,7 @@
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { startLoad, loadProfile } from '../load/generator.mjs'
+import { arg, flag, list } from './lib/args.mjs'
 import { Checkpoint } from './lib/checkpoint.mjs'
 import { captureEnv } from './lib/env.mjs'
 import { cellId, expandGrid, loadCalibration, loadRouteTable, makeRng, shuffle } from './lib/grid.mjs'
@@ -39,15 +40,6 @@ const LOAD_CONTROL_URL = process.env.LOAD_CONTROL_URL ?? null
 /** 원격에서 새로 잡은 캘리브레이션. 실험 메타데이터에 남긴다. */
 const remoteCalibration = {}
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
-function list(name) {
-  const v = arg(name, null)
-  return v ? v.split(',').map((s) => s.trim()) : null
-}
-const flag = (name) => process.argv.includes(`--${name}`)
 
 const NAME = arg('name', 'run')
 const REPS = Number(arg('reps', 30))
@@ -152,10 +144,29 @@ const ckpt = useCloud
       bucket: RESULTS_BUCKET,
       table: CHECKPOINT_TABLE,
       experiment: NAME,
-      shardIndex: Number(process.env.UGRP_SHARD_INDEX ?? 0),
+      shardIndex: cloudShardIndex(),
       region: process.env.AWS_REGION,
     })
   : new Checkpoint(RUN_DIR)
+
+/*
+ * 샤드 인덱스는 두 곳에서 온다 — `--shard-index`(셀 배정)와 UGRP_SHARD_INDEX
+ * (S3 프리픽스·캘리브레이션 키). 인프라는 둘을 같은 값에서 만들지만, 수동
+ * RunTask override에서 한쪽만 바꾸면 샤드 A의 셀이 샤드 B 프리픽스에 실리고
+ * `#calibration#`이 서로 덮어써진다 — "이 샤드의 부하가 실제 VU 몇이었나"라는
+ * 셀 정의의 일부가 소실되는 사고다. 어긋나면 시작을 거부한다.
+ */
+function cloudShardIndex() {
+  const env = process.env.UGRP_SHARD_INDEX
+  if (env !== undefined && SHARD_INDEX !== null && Number(env) !== Number(SHARD_INDEX)) {
+    console.error(
+      `UGRP_SHARD_INDEX(${env})와 --shard-index(${SHARD_INDEX})가 다르다 — ` +
+        '한쪽만 override된 실행이다. 데이터가 남의 샤드 프리픽스에 실리기 전에 멈춘다.',
+    )
+    process.exit(1)
+  }
+  return Number(env ?? SHARD_INDEX ?? 0)
+}
 if (useCloud) {
   console.log(`\n체크포인트 — S3 ${RESULTS_BUCKET} · DynamoDB ${CHECKPOINT_TABLE}`)
 }

@@ -23,17 +23,11 @@
  * append로만 쓰므로, 도는 중에 지워도 이번 실행에는 반영되지 않고 파일만 어긋난다.
  */
 import { readFile, rename, writeFile, stat } from 'node:fs/promises'
+import { arg, flag } from './lib/args.mjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-
-const arg = (name, fallback = null) => {
-  const i = process.argv.indexOf(`--${name}`)
-  if (i < 0) return fallback
-  const v = process.argv[i + 1]
-  return v && !v.startsWith('--') ? v : true
-}
 
 const name = arg('name')
 if (!name) {
@@ -170,7 +164,7 @@ for (const [c, n] of [...hit].sort()) {
 }
 
 // ── 재수집 등록 ────────────────────────────────────────────────────────────
-if (arg('requeue')) {
+if (flag('requeue')) {
   if (await looksLive()) {
     console.error(
       '\n수집이 도는 중으로 보인다(results.jsonl이 2분 내 갱신됨).\n' +

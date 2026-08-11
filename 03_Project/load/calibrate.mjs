@@ -15,6 +15,7 @@
  */
 import { writeFile } from 'node:fs/promises'
 import { loadProfile, startLoad } from './generator.mjs'
+import { searchVus } from './search.mjs'
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
 
@@ -26,15 +27,8 @@ const MAX_VUS = Number(process.env.MAX_VUS ?? 256)
 /** 목표 CPU와의 허용 오차(%p). 이보다 가까우면 탐색을 멈춘다. */
 const TOLERANCE = Number(process.env.TOLERANCE ?? 4)
 /*
- * 지속 확인 단계 — loadControl.mjs의 calibrateRemote와 같은 구조.
- *
- * **짧은 버스트로 잰 VU→CPU 대응은 지속 상태에서 성립하지 않는다.** 고정 VU는
- * 동시성을 고정할 뿐이고, 닫힌 루프에서 처리율 = 동시성 / (thinkTime + 응답시간)이라
- * 서버가 포화에 가까워지면 응답시간이 늘어 CPU가 내려앉는다. slice-b2에서 세 부하
- * 수준 모두 지속 CPU가 버스트보다 12~16%p 낮았다. 그 수정(c66d7c8)이 원격 경로에만
- * 들어가고 이 파일은 버스트 전용으로 남아 있었다 — 로컬로 부하 셀을 수집하는 순간
- * run.mjs가 이 파일의 cpuPct를 기대값으로 쓰므로, mid·high는 이탈 감시(±12%p)에
- * 걸려 중단되고 low는 걸리지 않은 채 부하 축이 부풀려진 라벨로 수집된다.
+ * 지속 확인 단계의 매개변수. 왜 버스트만으로 안 되는지는 search.mjs의 주석 참조 —
+ * 알고리즘은 원격(loadControl.mjs)과 공유하는 단일 구현이다.
  */
 const HOLD_SETTLE_MS = Number(process.env.HOLD_SETTLE_MS ?? 30_000)
 const HOLD_MS = Number(process.env.HOLD_MS ?? 180_000)
@@ -132,98 +126,28 @@ let floorVus = 1
 
 for (const [name, target] of targets) {
   /*
-   * 상한을 먼저 넓힌다(exponential probe). 이진 탐색만으로 시작하면 상한(MAX_VUS)에서
-   * 한 번 재야 하는데, 목표가 낮을 때 그 한 번이 서버를 포화시켜 이후 측정이 오염된다.
+   * 탐색(지수 탐침 → 이분 → 지속 확인)은 load/search.mjs의 단일 구현이다 —
+   * loadControl.mjs(원격)와 복제돼 있다가 수정이 한쪽에만 들어가는 사고가 났었다.
    *
-   * 시작점은 이전(더 낮은) 수준의 확정 VU다. CPU는 VU에 대해 단조 증가하므로
+   * floor는 이전(더 낮은) 수준의 확정 VU다. CPU는 VU에 대해 단조 증가하므로
    * 그 아래는 볼 필요가 없고, 30%를 맞춘 VU에서 65%를 찾기 시작하는 것이 옳다.
    */
-  let lo = floorVus
-  let hi = floorVus
-  let hiCpu = 0
-  /*
-   * 두 배씩 올리되 **상한에서 한 번은 반드시 잰다.**
-   *
-   * `while (hi <= MAX_VUS)`로 두면 hi가 상한을 넘는 순간 루프가 빠져나가면서
-   * 마지막으로 잰 값(더 낮은 VU의 값)을 상한의 값인 것처럼 보고한다.
-   * 실측에서 "VU 96에서도 81.5%"라고 출력했는데 96은 측정한 적조차 없었다 —
-   * 측정하지 않은 값을 셀 정의에 적는 것이라 반드시 막아야 한다.
-   */
-  while (true) {
-    const m = await measureAt(hi, profile)
-    console.log(`  ${name.padEnd(6)} 탐색 VU=${String(hi).padStart(3)}  cpu=${m.cpuPct.toFixed(1)}%`)
-    hiCpu = m.cpuPct
-    if (m.cpuPct >= target) break
-    if (hi >= MAX_VUS) break
-    lo = hi
-    hi = Math.min(MAX_VUS, hi * 2)
-  }
-
-  if (hiCpu < target) {
-    console.log(
-      `  ${name.padEnd(6)} 경고: VU ${hi}(상한 ${MAX_VUS})에서도 ${hiCpu.toFixed(1)}% — 목표 ${target}% 미달`,
-    )
-    results[name] = { vus: hi, cpuPct: hiCpu, target, reached: false }
-    continue
-  }
-
-  let burst = { vus: hi, cpuPct: hiCpu }
-  while (hi - lo > 1) {
-    const mid = Math.floor((lo + hi) / 2)
-    const m = await measureAt(mid, profile)
-    console.log(`  ${name.padEnd(6)} 탐색 VU=${String(mid).padStart(3)}  cpu=${m.cpuPct.toFixed(1)}%`)
-
-    if (Math.abs(m.cpuPct - target) < Math.abs(burst.cpuPct - target)) {
-      burst = { vus: mid, cpuPct: m.cpuPct }
-    }
-    if (Math.abs(m.cpuPct - target) <= TOLERANCE) break
-    if (m.cpuPct < target) lo = mid
-    else hi = mid
-  }
-
-  /*
-   * 2단계: 지속 상태 확인 + 비례 보정. 이진 탐색은 이웃을 싸게 찾는 용도이고,
-   * 기록에 남는 cpuPct는 **지속값**이다 — run.mjs의 이탈 감시가 측정 중에 비교하는
-   * 값이 바로 이것이어야 한다. calibrateRemote와 같은 감쇠(0.7) 비례 보정.
-   */
-  let vus = burst.vus
-  let best = null
-  let round = 0
-  while (round < Math.max(1, HOLD_ROUNDS)) {
-    round++
-    const h = await holdAt(vus, profile)
-    console.log(
-      `  ${name.padEnd(6)} 지속 확인 ${round}/${HOLD_ROUNDS} VU=${String(vus).padStart(3)}  ` +
-        `cpu=${h.cpuPct.toFixed(1)}% (목표 ${target}% · 버스트 ${burst.cpuPct.toFixed(1)}%)`,
-    )
-    if (best === null || Math.abs(h.cpuPct - target) < Math.abs(best.cpuPct - target)) {
-      best = { vus, cpuPct: h.cpuPct, eventLoopP95Ms: h.eventLoopP95Ms }
-    }
-    if (Math.abs(h.cpuPct - target) <= TOLERANCE) break
-
-    // 포화 근처에서 VU→CPU 기울기가 완만해지므로 순수 비례로 밀면 넘겨 짚고 진동한다.
-    const scale = h.cpuPct > 0 ? target / h.cpuPct : 2
-    const next = Math.max(1, Math.min(MAX_VUS, Math.round(vus * (1 + (scale - 1) * 0.7))))
-    if (next === vus) {
-      console.log(`  ${name.padEnd(6)} 지속 확인 — VU ${vus}에서 보정할 여지가 없다 (상한 ${MAX_VUS})`)
-      break
-    }
-    vus = next
-  }
-
-  results[name] = {
-    ...best,
+  const r = await searchVus({
     target,
-    reached: Math.abs(best.cpuPct - target) <= TOLERANCE,
-    // 버스트값도 남긴다 — 둘의 차이가 이 머신에서 닫힌 루프가 얼마나 물러나는지의 기록이다.
-    burst: { ...burst },
-    holdRounds: round,
-    holdMs: HOLD_MS,
-  }
-  floorVus = Math.max(1, best.vus)
+    tolerance: TOLERANCE,
+    maxVus: MAX_VUS,
+    floor: floorVus,
+    measureAt: (vus) => measureAt(vus, profile),
+    holdAt: (vus) => holdAt(vus, profile),
+    holdRounds: HOLD_ROUNDS,
+    log: (m) => console.log(`  ${name.padEnd(6)} ${m}`),
+  })
+
+  results[name] = { ...r, holdMs: HOLD_MS }
+  floorVus = Math.max(1, r.vus)
   console.log(
-    `  ${name.padEnd(6)} 확정 VU=${best.vus}  지속 cpu=${best.cpuPct.toFixed(1)}% (목표 ${target}%)` +
-      `${results[name].reached ? '' : ' — 허용 오차 초과'}`,
+    `  ${name.padEnd(6)} 확정 VU=${r.vus}  지속 cpu=${r.cpuPct.toFixed(1)}% (목표 ${target}%)` +
+      `${r.reached ? '' : ' — 허용 오차 초과'}`,
   )
 }
 

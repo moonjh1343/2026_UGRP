@@ -13,6 +13,8 @@
  * 절대 보정하지 않는다.
  */
 
+import { searchVus } from '../../load/search.mjs'
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
@@ -90,25 +92,9 @@ async function measureAt({ base, controlUrl, vus, settleMs, observeMs }) {
  * 18코어 머신에서 1코어를 할당한 기준이다. 태스크 크기가 다르면 VU→CPU 대응이
  * 통째로 달라지고, 그대로 쓰면 부하 수준이 그리드가 말하는 것과 다른 값이 된다.
  *
- * ------------------------------------------------------------------ 2단계 구조
- *
- * **짧은 버스트로 잰 VU→CPU 대응은 지속 상태에서 성립하지 않는다.**
- *
- * 고정 VU는 CPU를 고정하는 게 아니라 **동시성**을 고정한다. 닫힌 루프에서
- * 처리율 = 동시성 / (thinkTime + 응답시간)이고, 서버가 포화에 가까워지면 응답시간이
- * 늘어나 처리율이 내려가고 CPU도 함께 내려간다. 20초 관측창은 응답시간이 새 평형에
- * 닿기 전의 과도 상태를 잡는다. 반면 측정은 셀당 수 분씩 돌아가므로 평형값을 본다.
- *
- * slice-b2에서 세 부하 수준 모두 지속 CPU가 버스트 캘리브레이션보다 12~16%p 낮았다
- * (low 15.0 vs 27.4 · mid 51.3 vs 64.6 · high 74.5 vs 89.0). 리스너 누수와는 무관한
- * 별개 원인이고, 이탈 감시가 셋 다 잡아냈다.
- *
- * 그래서 이진 탐색은 **이웃을 싸게 찾는 용도로만** 쓰고, 고른 VU를 몇 분 유지해
- * 평형 CPU를 재고, 목표에서 벗어나면 VU를 비례 보정해 다시 유지한다. 기록에 남는
- * `cpuPct`는 **지속 상태의 값**이다 — 이탈 감시가 측정 중에 비교하는 그 값이어야 한다.
- *
- * **이것은 측정 중 제어 루프가 아니다.** 전부 측정 시작 전에 끝나고, 그 뒤 VU는
- * 얼린다. 부하가 측정 대상에 반응하면 외생성이 깨진다는 규칙은 그대로다.
+ * 탐색 알고리즘(지수 탐침 → 이진 탐색 → 지속 확인)은 `load/search.mjs`의 단일
+ * 구현을 쓴다 — calibrate.mjs와 복제돼 있다가 수정이 한쪽에만 들어가는 사고가
+ * 실제로 났고(c66d7c8), 여기는 원격 측정 함수만 주입한다.
  */
 export async function calibrateRemote({
   base,
@@ -124,79 +110,16 @@ export async function calibrateRemote({
   holdRounds = 4,
   log = console.log,
 }) {
-  if (target <= 0) return { vus: 0, cpuPct: 0, target, reached: true }
-
-  const at = (vus) => measureAt({ base, controlUrl, vus, settleMs, observeMs })
-
-  let lo = 0
-  let hi = 1
-  let m = await at(hi)
-  log(`  캘리브레이션 탐침 VU=${hi} cpu=${m.cpuPct.toFixed(1)}%`)
-  while (m.cpuPct < target && hi < maxVus) {
-    lo = hi
-    hi = Math.min(maxVus, hi * 2)
-    m = await at(hi)
-    log(`  캘리브레이션 탐침 VU=${hi} cpu=${m.cpuPct.toFixed(1)}%`)
-  }
-
-  let burst = { vus: hi, cpuPct: m.cpuPct }
-  if (m.cpuPct < target) {
-    log(`  경고: VU ${hi}(상한 ${maxVus})에서도 버스트 ${m.cpuPct.toFixed(1)}% — 목표 ${target}% 미달`)
-  } else {
-    while (hi - lo > 1) {
-      const mid = Math.floor((lo + hi) / 2)
-      const r = await at(mid)
-      log(`  캘리브레이션 이분 VU=${mid} cpu=${r.cpuPct.toFixed(1)}%`)
-      if (Math.abs(r.cpuPct - target) < Math.abs(burst.cpuPct - target)) burst = { vus: mid, cpuPct: r.cpuPct }
-      if (Math.abs(r.cpuPct - target) <= tolerance) break
-      if (r.cpuPct < target) lo = mid
-      else hi = mid
-    }
-  }
-
-  // ---------------------------------------------------- 2단계: 지속 상태 확인
-  let vus = burst.vus
-  let best = null
-  let round = 0
-  while (round < Math.max(1, holdRounds)) {
-    round++
-    const h = await measureAt({ base, controlUrl, vus, settleMs: holdSettleMs, observeMs: holdMs })
-    log(
-      `  지속 확인 ${round}/${holdRounds} VU=${vus} cpu=${h.cpuPct.toFixed(1)}% ` +
-        `(목표 ${target}% · 버스트 ${burst.cpuPct.toFixed(1)}%)`,
-    )
-    if (best === null || Math.abs(h.cpuPct - target) < Math.abs(best.cpuPct - target)) best = h
-    if (Math.abs(h.cpuPct - target) <= tolerance) break
-
-    /*
-     * 비례 보정에 감쇠를 건다. 포화 근처에서 VU→CPU 기울기가 완만해지므로 순수
-     * 비례(target/cpu)로 밀면 넘겨 짚고 진동한다.
-     */
-    const scale = h.cpuPct > 0 ? target / h.cpuPct : 2
-    const next = Math.max(1, Math.min(maxVus, Math.round(vus * (1 + (scale - 1) * 0.7))))
-    if (next === vus) {
-      log(`  지속 확인 — VU ${vus}에서 보정할 여지가 없다 (상한 ${maxVus})`)
-      break
-    }
-    vus = next
-  }
-
-  const reached = Math.abs(best.cpuPct - target) <= tolerance
-  if (!reached) {
-    log(`  경고: 지속 상태 ${best.cpuPct.toFixed(1)}% — 목표 ${target}%에 ${holdRounds}회 안에 못 맞췄다`)
-  }
-  /*
-   * `cpuPct`는 지속값이다. 버스트값도 남긴다 — 둘의 차이가 이 태스크 크기에서
-   * 닫힌 루프가 얼마나 물러나는지의 기록이고, 사후에 부하 축을 해석할 때 쓴다.
-   */
-  return {
-    ...best,
+  const result = await searchVus({
     target,
-    reached,
-    holdRounds: round,
-    holdMs,
-    burst: { ...burst },
-  }
+    tolerance,
+    maxVus,
+    measureAt: (vus) => measureAt({ base, controlUrl, vus, settleMs, observeMs }),
+    holdAt: (vus) => measureAt({ base, controlUrl, vus, settleMs: holdSettleMs, observeMs: holdMs }),
+    holdRounds,
+    log: (m) => log(`  캘리브레이션 ${m}`),
+  })
+  return { ...result, holdMs }
 }
 
 /**

@@ -146,5 +146,3 @@ export function isModeAllowed(mode: Mode, route: Route): boolean {
 export function totalCandidateCells(): number {
   return ROUTES.reduce((sum, r) => sum + candidateModes(r).length, 0)
 }
-
-export { MODES }

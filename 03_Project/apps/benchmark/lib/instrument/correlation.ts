@@ -70,8 +70,6 @@ export const TIMING = {
   sessionId: 'sid',
   mode: 'mode',
   route: 'route',
-  cache: 'cache',
-  render: 'render',
   /** 결정 계층 추론 시간. dur이 4단계 합격 기준(< 2ms)의 측정값이다 */
   policy: 'policy',
 } as const

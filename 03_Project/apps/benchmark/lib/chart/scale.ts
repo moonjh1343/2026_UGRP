@@ -13,7 +13,6 @@ export type Scale = {
   domain: [number, number]
   range: [number, number]
   map(v: number): number
-  invert(p: number): number
   ticks(count: number): number[]
 }
 
@@ -26,7 +25,6 @@ export function linearScale(domain: [number, number], range: [number, number]): 
     domain,
     range,
     map: (v) => r0 + ((v - d0) / span) * (r1 - r0),
-    invert: (p) => d0 + ((p - r0) / (r1 - r0 || 1)) * span,
     ticks: (count) => niceTicks(d0, d1, count),
   }
 }

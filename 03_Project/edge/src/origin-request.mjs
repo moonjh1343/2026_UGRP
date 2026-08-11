@@ -14,7 +14,7 @@
  *   - 응답 후 실행이 동결된다 → 서버 상태 갱신을 await 하지 않고 던져만 둔다.
  *     다음 호출에서 해동되며 이어진다. 값이 최대 30초 스테일이어도 되는 설계라 괜찮다.
  */
-import { collect, decide, lookup, parsePublicPath, readDecisions, scheduleRefresh } from '@policy'
+import { collect, decide, EFFECTIVE_TYPES, lookup, parsePublicPath, readDecisions, scheduleRefresh } from '@policy'
 import { EXPLORE_RATE, ORIGIN_URL, POLICY_NAME } from './config.js'
 
 const HEADER = {
@@ -66,7 +66,8 @@ function applyBucket(cf, bucket) {
   if (parts.length !== 4) return
   const [tier, ectIdx, bot, saveData] = parts
   setHeader(cf, 'x-cell-device-tier', tier)
-  setHeader(cf, 'x-cell-effective-type', ['slow-2g', '2g', '3g', '4g'][Number(ectIdx)] ?? '4g')
+  // 역매핑의 순서 원본은 정책 계층이다 — 인라인 사본은 "어댑터가 복사본이 되는" 시작점이었다.
+  setHeader(cf, 'x-cell-effective-type', EFFECTIVE_TYPES[Number(ectIdx)] ?? '4g')
   if (bot === '1') setHeader(cf, 'user-agent', 'Googlebot/2.1 (+http://www.google.com/bot.html)')
   if (saveData === '1') setHeader(cf, 'save-data', 'on')
 }

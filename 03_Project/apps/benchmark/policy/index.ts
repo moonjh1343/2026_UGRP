@@ -19,7 +19,7 @@ import type { RouteEntry } from './routeTable'
 import { resolvePolicy } from './policies'
 import { touch, type SessionDecision } from './session'
 
-export { collect } from './features'
+export { collect, EFFECTIVE_TYPES } from './features'
 export { lookup, parseForcedPath, parsePublicPath, bundlesGenerated } from './routeTable'
 export { readDecisions, writeDecisions } from './session'
 export { scheduleRefresh } from './serverState'

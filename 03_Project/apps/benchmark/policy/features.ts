@@ -17,7 +17,12 @@ export type RequestLike = {
   cookies: { get(name: string): { value: string } | undefined }
 }
 
-const EFFECTIVE_TYPES: readonly EffectiveType[] = ['slow-2g', '2g', '3g', '4g']
+/**
+ * 버킷 인덱스 ↔ 유효 네트워크의 순서 정의. 이 순서가 곧 캐시 키의 의미다.
+ * 소비처: toVector()의 effectiveTypeIdx, edge origin-request의 역매핑,
+ * training config.py(수동 사본), viewer-request.js(ES5.1이라 import 불가 — 수동 사본).
+ */
+export const EFFECTIVE_TYPES: readonly EffectiveType[] = ['slow-2g', '2g', '3g', '4g']
 
 /**
  * 크롤러 판정. SEO 리스크는 모델에 위임하지 않는다(제안서 §3.5).

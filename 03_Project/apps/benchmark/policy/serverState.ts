@@ -35,14 +35,24 @@ const EMPTY: RemoteSnapshot = {
   ts: 0,
 }
 
-type Cache = { snap: RemoteSnapshot; fetchedAt: number; refreshing: boolean }
+type Cache = { snap: RemoteSnapshot; fetchedAt: number; refreshingSince: number }
 
 /**
  * 모듈 스코프에 두는 것으로 충분하다 — 엣지 아이솔레이트는 재사용되고,
  * 새 아이솔레이트가 뜨면 첫 요청만 EMPTY를 보고 곧바로 채워진다.
  * 첫 요청이 0을 보는 것은 제안서 §3.4의 "첫 요청은 보수적으로 기본 모드"와 같은 상황이다.
  */
-const cache: Cache = { snap: EMPTY, fetchedAt: 0, refreshing: false }
+const cache: Cache = { snap: EMPTY, fetchedAt: 0, refreshingSince: 0 }
+
+/** 갱신 fetch의 상한. 이 이상 걸리면 끊는다 — 스테일 값으로 계속 가는 것이 낫다. */
+const REFRESH_TIMEOUT_MS = 5_000
+/**
+ * refreshingSince가 이보다 오래됐으면 진행 중 표시를 무시한다. Lambda@Edge는 응답 후
+ * 실행을 동결하는데, 동결 중 소켓이 회수되어 Promise가 영영 settle하지 않으면
+ * finally가 돌지 않는다 — 플래그가 boolean이면 그 아이솔레이트는 영원히 갱신을
+ * 예약하지 않고 서버 상태 피처가 무오류로 동결된다("영원히 0" 사고의 남은 변종).
+ */
+const REFRESH_STUCK_MS = 30_000
 
 /** 지금 캐시된 값. 절대 블로킹하지 않는다. */
 export function cachedSnapshot(): { snap: RemoteSnapshot; ageMs: number; warm: boolean } {
@@ -56,13 +66,16 @@ export function cachedSnapshot(): { snap: RemoteSnapshot; ageMs: number; warm: b
  * 모든 서버 상태 피처가 0으로 굳는다.
  */
 export function scheduleRefresh(origin: string): Promise<void> | null {
-  const ageMs = cache.fetchedAt === 0 ? Infinity : Date.now() - cache.fetchedAt
-  if (cache.refreshing || ageMs < SERVER_STATE_TTL_MS) return null
+  const now = Date.now()
+  const ageMs = cache.fetchedAt === 0 ? Infinity : now - cache.fetchedAt
+  const refreshing = cache.refreshingSince !== 0 && now - cache.refreshingSince < REFRESH_STUCK_MS
+  if (refreshing || ageMs < SERVER_STATE_TTL_MS) return null
 
-  cache.refreshing = true
+  cache.refreshingSince = now
   return fetch(`${origin}/api/internal/metrics`, {
     headers: { 'x-policy-internal': '1' },
     cache: 'no-store',
+    signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
   })
     .then((r) => (r.ok ? (r.json() as Promise<RemoteSnapshot>) : null))
     .then((snap) => {
@@ -75,6 +88,6 @@ export function scheduleRefresh(origin: string): Promise<void> | null {
       /* 상태 조회 실패는 결정을 막지 않는다 — 스테일 값으로 계속 간다 */
     })
     .finally(() => {
-      cache.refreshing = false
+      cache.refreshingSince = 0
     })
 }

@@ -71,10 +71,23 @@ export function decide(input: DecideInput): Decision {
    * 1) 강제 지정. factorial 수집에서는 동일 조건에서 5개 모드를 모두 측정해야
    *    반사실 데이터가 나오므로, 워커가 정책을 우회한다(설계 문서 §2).
    *    이때도 M(x) 밖은 허용하지 않는다 — 그리드 정의에서 이미 빠진 셀이다.
+   *
+   *    **세션은 여기서도 갱신한다.** 필드 경로에서 forced는 "엣지가 이미 내린
+   *    결정"인데, 엣지(origin-request)는 응답 쿠키를 쓸 수 없어 자기 세션 갱신을
+   *    버린다. 응답 쿠키를 쓸 수 있는 오리진의 이 지점이 전환 집계를 이어받지
+   *    않으면 __dec가 영영 비고 session-cap이 필드에서 한 번도 발동하지 않는다.
+   *    랩 수집은 /m/ 직접 경로라 decide() 자체를 타지 않는다 — 영향 없다.
    */
   if (input.forcedMode && MODES.includes(input.forcedMode as Mode)) {
     const want = input.forcedMode as Mode
-    return done(shell(within(cands, want), cands.includes(want) ? 'forced' : 'infeasible', want), t0)
+    const applied = within(cands, want)
+    const forcedPrior = session.get(key)
+    if (!forcedPrior || !cands.includes(forcedPrior.mode)) {
+      touch(session, key, { mode: applied, switches: 0 })
+    } else if (forcedPrior.mode !== applied) {
+      touch(session, key, { mode: applied, switches: forcedPrior.switches + 1 })
+    }
+    return done(shell(applied, cands.includes(want) ? 'forced' : 'infeasible', want), t0)
   }
 
   // 2) 후보가 하나뿐이면 폴백도 무의미하다. 결제·인증 라우트(hardPinned)가 여기 걸린다.

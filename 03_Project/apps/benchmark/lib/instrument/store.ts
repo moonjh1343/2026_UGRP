@@ -28,6 +28,13 @@ export type RenderRecord = {
   policy: string | null
   decisionReason: string | null
   policyUs: number | null
+  /**
+   * 1·2위 예측 차와 무작위화 성향 점수. 엣지가 요청 헤더로 실어 보낸다.
+   * propensity가 레코드에 남지 않으면 필드 무작위화(제안서 §5.5)가 무의미해진다 —
+   * 오프폴리시 평가에 필요한 바로 그 값이기 때문이다. 랩 경로·SSG에서는 null.
+   */
+  decisionMargin: number | null
+  propensity: number | null
   ts: number
 }
 

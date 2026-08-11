@@ -80,6 +80,7 @@ export type DecisionReason =
   | 'infeasible' // 정책이 M(x) 밖의 모드를 골랐다
   | 'margin' // 1·2위 차 < τ → 전환하지 않음
   | 'session-cap' // 세션당 전환 상한 도달
+  | 'explore' // 필드 무작위화 — 엣지가 탐색 표본으로 뽑았다 (제안서 §5.5)
 
 export type Decision = {
   /** 실제 적용할 모드 — 항상 M(x)의 원소 */

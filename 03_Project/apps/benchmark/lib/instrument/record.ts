@@ -29,6 +29,8 @@ export async function recordRender<T>(
   let policy: string | null = null
   let decisionReason: string | null = null
   let policyUs: number | null = null
+  let decisionMargin: number | null = null
+  let propensity: number | null = null
   if (mode !== 'ssg') {
     const h = await headers()
     cid = h.get(HEADER.correlationId)
@@ -37,6 +39,10 @@ export async function recordRender<T>(
     decisionReason = h.get(HEADER.decisionReason)
     const us = h.get(HEADER.policyUs)
     policyUs = us === null ? null : Number(us)
+    const mg = h.get(HEADER.decisionMargin)
+    decisionMargin = mg === null ? null : Number(mg)
+    const pr = h.get(HEADER.propensity)
+    propensity = pr === null ? null : Number(pr)
   }
 
   const cpu0 = process.cpuUsage()
@@ -60,6 +66,8 @@ export async function recordRender<T>(
       policy,
       decisionReason,
       policyUs,
+      decisionMargin,
+      propensity,
       ts: Date.now(),
     })
   }

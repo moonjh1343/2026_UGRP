@@ -55,6 +55,8 @@ export async function GET(
       policy: null,
       decisionReason: null,
       policyUs: null,
+      decisionMargin: null,
+      propensity: null,
       ts: Date.now(),
     })
   }

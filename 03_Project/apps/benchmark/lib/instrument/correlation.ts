@@ -26,12 +26,14 @@ export const HEADER = {
   policy: 'x-policy',
   /** 모드 강제 지정 — factorial 수집에서 정책을 우회한다 */
   forceMode: 'x-render-mode',
-  /** 결정 사유 (policy|forced|single|bot|circuit|infeasible|margin|session-cap) */
+  /** 결정 사유 (policy|forced|single|bot|circuit|infeasible|margin|session-cap|explore) */
   decisionReason: 'x-decision-reason',
   /** 1·2위 예측 차 — τ와 비교된 값 */
   decisionMargin: 'x-decision-margin',
   /** 추론 시간(µs). 4단계 합격 기준 < 2000 */
   policyUs: 'x-policy-us',
+  /** 필드 무작위화 성향 점수 — 엣지가 싣는다. 오프폴리시 평가의 분모다 */
+  propensity: 'x-ugrp-propensity',
 
   /*
    * 조건 주입 — 측정 워커가 **실제로 건 조건**을 알려준다.

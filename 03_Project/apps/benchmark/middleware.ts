@@ -67,27 +67,43 @@ export function middleware(req: NextRequest, event: NextFetchEvent) {
       session,
     })
 
-    // 앱이 레코드에 남길 수 있도록 결정 결과를 요청 헤더로 넘긴다.
+    /*
+     * 앱이 레코드에 남길 수 있도록 결정 결과를 요청 헤더로 넘긴다.
+     *
+     * **엣지가 이미 결정한 요청은 덮어쓰지 않는다.** 필드 경로에서는 엣지
+     * (origin-request)가 결정을 내리고 x-render-mode로 강제하므로 여기 reason은
+     * 항상 'forced'가 되는데, 진짜 사유(policy/explore/margin/session-cap)·마진·
+     * 성향 점수는 엣지가 실은 요청 헤더에 이미 있다. 그걸 'forced'로 덮어쓰면
+     * 서버 레코드에서 그 구분이 통째로 사라진다 — 오프폴리시 평가가 기대는 값들이다.
+     * 엣지가 없는 경로(로컬 검증·직접 접근)에서만 여기 결정을 싣는다.
+     */
+    const edgeReason = d.reason === 'forced' ? req.headers.get(HEADER.decisionReason) : null
     requestHeaders.set(HEADER.modeApplied, d.mode)
-    requestHeaders.set(HEADER.policy, d.policy)
-    requestHeaders.set(HEADER.decisionReason, d.reason)
-    requestHeaders.set(HEADER.policyUs, d.inferenceUs.toFixed(1))
+    if (edgeReason === null) {
+      requestHeaders.set(HEADER.policy, d.policy)
+      requestHeaders.set(HEADER.decisionReason, d.reason)
+      requestHeaders.set(HEADER.policyUs, d.inferenceUs.toFixed(1))
+    }
 
     const url = req.nextUrl.clone()
     url.pathname = `/m/${d.mode}/${entry.route.type}/${entry.route.key}`
 
+    const reasonOut = edgeReason ?? d.reason
     timings.push(
-      timingEntry(TIMING.policy, d.reason, d.inferenceUs / 1000),
+      timingEntry(TIMING.policy, reasonOut, d.inferenceUs / 1000),
       timingEntry(TIMING.mode, d.mode),
       timingEntry(TIMING.route, entry.route.key),
     )
 
     const res = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
     res.headers.set(HEADER.modeApplied, d.mode)
-    res.headers.set(HEADER.policy, d.policy)
-    res.headers.set(HEADER.decisionReason, d.reason)
+    res.headers.set(HEADER.policy, edgeReason === null ? d.policy : (req.headers.get(HEADER.policy) ?? d.policy))
+    res.headers.set(HEADER.decisionReason, reasonOut)
     res.headers.set(HEADER.policyUs, d.inferenceUs.toFixed(1))
-    if (d.margin !== null && Number.isFinite(d.margin)) {
+    const edgeMargin = edgeReason !== null ? req.headers.get(HEADER.decisionMargin) : null
+    if (edgeMargin !== null) {
+      res.headers.set(HEADER.decisionMargin, edgeMargin)
+    } else if (d.margin !== null && Number.isFinite(d.margin)) {
       res.headers.set(HEADER.decisionMargin, d.margin.toFixed(4))
     }
     return finish(res, {

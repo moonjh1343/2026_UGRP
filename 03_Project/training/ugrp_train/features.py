@@ -38,9 +38,19 @@ def build_feature_frame(df: pd.DataFrame, routes: pd.DataFrame, calibration: dic
     """
     측정 레코드(df) + 라우트 스냅샷(routes) → `FEATURE_ORDER` 열을 가진 DataFrame.
 
-    calibration은 `experiment.json`의 `calibration` 블록(부하 수준별 cpuPct·
-    eventLoopP95Ms)이다. 없으면 전부 0(Idle과 동일)으로 채운다 — 그 경우 결과는
-    부하 축의 정보를 담지 못한다는 뜻이고, 호출부가 경고해야 한다.
+    cpuPct의 출처는 우선순위가 있다:
+
+      1. 행 자체의 `serverCpuPct` — run.mjs가 셀 시작 시점에 실측한 **지속 관측값**.
+         버스트 캘리브레이션보다 정확하고, 행마다 다르다.
+      2. calibration 블록(`experiment.json`) — 로컬 수집의 수준별 캘리브레이션 값.
+      3. 둘 다 없는 비-idle 행이 있으면 **실패한다.** 원격 수집(slice-b2)은
+         experiment.json의 calibration이 의도적으로 null이라(캘리브레이션이 DynamoDB에만
+         남는다), 예전처럼 조용히 0을 채우면 부하 축 피처가 통째로 사라진 데이터셋으로
+         학습이 초록색으로 완주한다 — 트리는 cpuPct로 절대 분기하지 않게 되고,
+         아무 에러도 없다.
+
+    eventLoopP95Ms는 행 단위 대체 필드가 없어 calibration 블록에서만 온다.
+    없으면 0으로 채우고 경고는 호출부 몫이다.
     """
     cond = _condition_frame()
     merged = df.merge(cond, on=["device", "network"], how="left")
@@ -57,14 +67,38 @@ def build_feature_frame(df: pd.DataFrame, routes: pd.DataFrame, calibration: dic
         bad = sorted(merged.loc[missing_mode, "mode"].unique())
         raise ValueError(f"MODE_INDEX에 없는 모드: {bad} — config.py를 policy/모델과 다시 맞춰라")
 
+    # 1순위: 행 자체의 지속 관측값. idle 행은 null이라(검증기가 기대값 없이는 재지
+    # 않는다) 아래 폴백으로 흘러간다.
+    if "serverCpuPct" in merged.columns:
+        row_cpu = pd.to_numeric(merged["serverCpuPct"], errors="coerce")
+    else:
+        row_cpu = pd.Series(float("nan"), index=merged.index)
+
+    # 2순위: 수준별 캘리브레이션 블록.
     if calibration:
         cal_cpu = {level: v.get("cpuPct", 0.0) for level, v in calibration.items()}
         cal_loop = {level: v.get("eventLoopP95Ms", 0.0) for level, v in calibration.items()}
-        merged["cpuPct"] = merged["load"].map(cal_cpu).fillna(0.0)
+        fallback_cpu = merged["load"].map(cal_cpu)
         merged["eventLoopP95Ms"] = merged["load"].map(cal_loop).fillna(0.0)
     else:
-        merged["cpuPct"] = 0.0
+        fallback_cpu = pd.Series(float("nan"), index=merged.index)
         merged["eventLoopP95Ms"] = 0.0
+
+    merged["cpuPct"] = row_cpu.fillna(fallback_cpu)
+
+    # 어느 출처도 없는 비-idle 행 — 조용히 0을 채우면 부하 축이 사라진다. 실패가 맞다.
+    orphan = merged["cpuPct"].isna() & (merged["load"] != "idle")
+    if orphan.any():
+        n = int(orphan.sum())
+        levels = sorted(merged.loc[orphan, "load"].unique())
+        raise ValueError(
+            f"{n}개 비-idle 행({levels})에 cpuPct 출처가 없다 — 행에 serverCpuPct가 없고 "
+            "experiment.json의 calibration도 null이다. 원격 수집이라면 캘리브레이션이 "
+            "DynamoDB(#calibration#<shard>)에만 있다: 그 값을 runs/<실험>/calibration.observed.json"
+            "으로 받아오거나, serverCpuPct가 기록된 데이터로 다시 수집하라. "
+            "조용히 0을 채우면 부하 축 피처가 통째로 사라진다."
+        )
+    merged["cpuPct"] = merged["cpuPct"].fillna(0.0)
 
     for key, val in LAB_FEATURE_DEFAULTS.items():
         merged[key] = val

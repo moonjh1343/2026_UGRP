@@ -75,9 +75,19 @@ def main() -> None:
     # 실험마다 캘리브레이션이 다를 수 있으므로 실험 단위로 붙인다.
     exp_calibration = {}
     for exp_name in labeled["experiment"].unique():
-        meta_path = REPO_ROOT / "03_Project" / "workers" / "runs" / exp_name / "experiment.json"
+        run_dir = REPO_ROOT / "03_Project" / "workers" / "runs" / exp_name
+        cal = None
+        meta_path = run_dir / "experiment.json"
         if meta_path.exists():
-            exp_calibration[exp_name] = json.loads(meta_path.read_text(encoding="utf-8")).get("calibration")
+            cal = json.loads(meta_path.read_text(encoding="utf-8")).get("calibration")
+        # 원격 수집은 experiment.json의 calibration이 의도적으로 null이다(다른 기계의
+        # 숫자를 남기지 않는다 — run.mjs 주석). 실행 시점 값은 calibration.observed.json
+        # (로컬 실행이 남기거나, DynamoDB의 #calibration#<shard>에서 받아온 것)에 있다.
+        observed_path = run_dir / "calibration.observed.json"
+        if observed_path.exists():
+            observed = json.loads(observed_path.read_text(encoding="utf-8"))
+            cal = {**(cal or {}), **(observed.get("levels") or {})}
+        exp_calibration[exp_name] = cal
 
     frames = []
     for exp_name, sub in labeled.groupby("experiment"):

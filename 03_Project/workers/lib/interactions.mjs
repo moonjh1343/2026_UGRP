@@ -41,7 +41,9 @@ export const SEQUENCES = {
      */
     { action: 'click', selector: '.toc button' },
   ],
-  // 아래 유형별 시퀀스는 전부 **실제 사용자 입력**만 쓴다 — 이유는 파일 하단 참조
+  // 아래 시퀀스는 INP 대상 스텝(클릭·키 입력)에 실제 사용자 입력을 쓴다.
+  // scroll만 예외로 window.scrollTo다 — 스크롤은 INP 대상이 아니라 지표 오염은
+  // 없지만, 실제 휠 입력의 핸들러·합성 비용은 발생하지 않는다는 한계가 있다.
   list: [
     { action: 'click', selector: '.chips button', nth: 0 },
     { action: 'click', selector: '.chips button', nth: 1 },
@@ -114,6 +116,12 @@ export async function runSequence(page, routeType) {
       await sleep(GAP_MS)
     } catch (e) {
       failures.push(`${step.action}:${step.selector ?? step.y} — ${String(e).split('\n')[0]}`)
+      /*
+       * 실패해도 GAP은 지킨다 — 건너뛰면 측정 창 길이가 성공/실패 패턴의 함수가
+       * 되어 셀마다 달라진다. content 시퀀스 주석이 지적한 "창 길이 불일치 =
+       * 통제 실패"의 축소판이다.
+       */
+      await sleep(GAP_MS)
     }
   }
 

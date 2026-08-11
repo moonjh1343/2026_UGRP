@@ -83,7 +83,12 @@ async function prepareCache(base, cell, { allowStale }) {
 async function fetchBeacon(base, cid, { timeoutMs = 4000 } = {}) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const dump = await (await fetch(`${base}/api/internal/records`)).json()
+    /*
+     * cid 필터를 서버에 넘긴다. 전체 덤프(링 버퍼 5000건×2)를 rep마다 최대
+     * 20회 직렬화시키는 것은 idle 셀의 "배경 부하 0" 전제에 반하는 비계측
+     * 비용이었다 — 필터하면 응답이 상수 크기다.
+     */
+    const dump = await (await fetch(`${base}/api/internal/records?cid=${encodeURIComponent(cid)}`)).json()
     const beacon = dump.beacons.find((b) => b.cid === cid)
     if (beacon) {
       const renders = dump.renders.filter((r) => r.cid === cid)
@@ -163,6 +168,25 @@ export async function measureOnce({ base, browser, cell, rep, allowStale = true 
     const joined = cid ? await fetchBeacon(base, cid) : null
     if (!joined) {
       return { ok: false, reason: cid ? '비콘 미도착' : '응답에 cid 없음', cell, rep }
+    }
+
+    /*
+     * **관측된 캐시 판정이 셀이 요구한 상태와 일치해야 한다.** 준비(prepareCache)만
+     * 하고 확인하지 않으면, 재검증 타이밍이 어긋난 rep(hit 준비 후 STALE 관측 등)이
+     * ok:true로 셀에 섞인다 — 캐시 상태를 셀 변수로 통제한 이유(분산 폭발)를
+     * 정확히 무력화하는 경로인데, 사후에는 원인 불명의 이상치로만 보인다.
+     * 불일치는 실패로 돌려 그 rep이 재시도·기각되게 한다.
+     */
+    if (cell.mode === 'ssg' && ['miss', 'hit', 'stale'].includes(cell.cache)) {
+      const observed = (cacheStatus ?? '').toLowerCase()
+      if (observed !== cell.cache) {
+        return {
+          ok: false,
+          reason: `캐시 불일치: 기대 ${cell.cache}, 관측 ${cacheStatus ?? '(없음)'}`,
+          cell,
+          rep,
+        }
+      }
     }
 
     /*

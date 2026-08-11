@@ -100,15 +100,21 @@ export async function loadRouteTable(base) {
 }
 
 export async function loadCalibration() {
+  let raw
   try {
-    const raw = await readFile(
+    raw = await readFile(
       new URL('../../load/calibration.generated.json', import.meta.url),
       'utf8',
     )
-    return JSON.parse(raw)
   } catch {
+    // 파일이 없는 것은 정상 상태다(캘리브레이션 전, 또는 원격 모드).
     return null
   }
+  /*
+   * 파손은 결측과 다르다. 반쯤 쓰이다 만 JSON을 null로 삼키면 "캘리브레이션 없음"
+   * 경로로 조용히 흘러가는데, 이 파일은 부하 축 라벨의 근거라 파손은 던져야 한다.
+   */
+  return JSON.parse(raw)
 }
 
 /** 셀 식별자. 체크포인트 키이자 데이터셋의 조인 키다. */

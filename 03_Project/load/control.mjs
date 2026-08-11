@@ -49,6 +49,21 @@ async function setVus(n) {
   return { vus: currentVus, changed: true }
 }
 
+/*
+ * **setVus는 직렬화해야 한다.** `current.stop()`이 수십 개 스트림을 정리하는 동안
+ * (이벤트 루프가 굶어 수십 초 걸릴 수 있다 — c66d7c8) 워커의 타임아웃 재시도가
+ * 두 번째 POST로 들어오면, 두 핸들러가 같은 핸들을 각각 stop한 뒤 각자 startLoad를
+ * 불러 먼저 시작된 생성기가 참조를 잃은 채 영원히 돈다. 실제 부하 = (고아 VU +
+ * 지시 VU)인데 기록에는 지시값만 남는다 — 부하 축이 조용히 오염되는 경로다.
+ * 체인이 실패해도 다음 요청을 막지 않도록 오류는 각 호출자에게만 전파한다.
+ */
+let vusChain = Promise.resolve()
+function setVusSerialized(n) {
+  const run = vusChain.then(() => setVus(n))
+  vusChain = run.catch(() => {})
+  return run
+}
+
 const json = (res, code, body) => {
   const payload = JSON.stringify(body)
   res.writeHead(code, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) })
@@ -76,7 +91,7 @@ const server = createServer(async (req, res) => {
       if (typeof body.vus !== 'number' || !Number.isFinite(body.vus) || body.vus < 0) {
         return json(res, 400, { error: 'vus는 0 이상의 유한한 수여야 한다' })
       }
-      const out = await setVus(body.vus)
+      const out = await setVusSerialized(body.vus)
       return json(res, 200, out)
     }
 
@@ -97,6 +112,8 @@ server.listen(PORT, '0.0.0.0', () => {
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, async () => {
     console.log(`${sig} — 부하 중단`)
+    // 진행 중인 setVus가 끝난 뒤에 멈춘다 — 안 그러면 같은 경합으로 고아가 남는다.
+    await vusChain.catch(() => {})
     await current.stop().catch(() => {})
     server.close(() => process.exit(0))
   })

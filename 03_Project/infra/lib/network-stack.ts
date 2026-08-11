@@ -73,6 +73,15 @@ export class NetworkStack extends Stack {
       allowAllOutbound: true,
     })
 
+    /*
+     * **샤드 격리는 네트워크가 아니라 설정으로 성립한다.** SG는 역할별(3개)이지
+     * 샤드별(3×N개)이 아니라서, 네트워크상으로는 모든 워커가 모든 샤드의 SUT에
+     * 닿을 수 있다 — 실제 격리는 각 태스크의 BASE_URL/LOAD_CONTROL_URL이 자기
+     * 샤드의 Cloud Map 이름을 가리키는 것에 의존한다. 수동 RunTask에서 그 값을
+     * override할 때 오배선하면 막아주는 계층이 없다는 뜻이다(run.mjs의 샤드
+     * 인덱스 교차 검증이 일부를 잡는다). 샤드별 SG N벌은 규칙 폭발이라 취하지
+     * 않은 트레이드오프임을 여기 남긴다.
+     */
     this.sutSg.addIngressRule(this.workerSg, ec2.Port.tcp(SUT_PORT), 'measurement requests')
     this.sutSg.addIngressRule(this.loadSg, ec2.Port.tcp(SUT_PORT), 'background load')
 

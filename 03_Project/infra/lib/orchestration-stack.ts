@@ -15,7 +15,7 @@
  * 해당되지 않는다. 일반 Map은 실행 이력이 한 화면에 남아 어느 샤드가 어디서 멈췄는지
  * 바로 보인다.
  */
-import { Stack, StackProps, Duration, CfnOutput } from 'aws-cdk-lib'
+import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions'
@@ -88,6 +88,13 @@ export class OrchestrationStack extends Stack {
        *
        * slice-b2에서 그렇게 됐다(2026-08-09). high 샤드가 부하 이탈로 스스로 멈췄고,
        * 재시도가 3회 더 띄워 4샤드 × 40분을 태운 뒤 같은 이유로 죽었다.
+       *
+       * 그 결과 감수하는 공백: **일시적 이미지 풀 실패도 재시도되지 않는다.**
+       * CannotPullContainerError는 RunTask 성공 후 태스크가 STOPPED로 끝나는
+       * 경로라 States.TaskFailed로 도착하기 때문이다. ECR 순단 한 번이 수집
+       * 전체를 세울 수 있다 — 자진 정지와 풀 실패를 가르려면 워커가 종료 코드로
+       * 신호하고 여기서 Choice로 갈라야 하는데, 그 복잡도 대신 "멈추면 사람이
+       * 보고 재개한다"를 선택했다. 체크포인트 덕에 재개 비용은 캘리브레이션뿐이다.
        */
       run.addRetry({
         errors: ['ECS.AmazonECSException', 'ECS.LimitExceededException'],
@@ -110,9 +117,17 @@ export class OrchestrationStack extends Stack {
      * 샤드 하나가 죽은 채 "수집 완료"로 끝나면, 그 부하 수준의 셀이 통째로 빈
      * 데이터셋을 완성본으로 착각하게 된다. 어느 샤드가 왜 멈췄는지는 실행 이력에 남고,
      * 고친 뒤 같은 실험 이름으로 다시 돌리면 체크포인트가 남은 셀만 잰다.
+     *
+     * 알고 감수하는 대가: 실패 순간 **건강한 나머지 브랜치도 셀 중간에서
+     * 취소된다**(RUN_JOB 태스크 중단). 체크포인트가 셀 단위라 데이터 파손은
+     * 없지만, 재개 시 전 샤드가 재캘리브레이션을 치르고 진행 중이던 셀은 다시
+     * 잰다 — 샤드당 15~20분씩의 비용이다.
      */
     const logGroup = new logs.LogGroup(this, 'StateMachineLogs', {
       retention: logs.RetentionDays.ONE_MONTH,
+      // shard-stack의 Logs와 같은 정책 — 지정하지 않으면 RETAIN이라 스택을
+      // 지워도 로그 그룹이 남아 쌓인다.
+      removalPolicy: RemovalPolicy.DESTROY,
     })
 
     this.stateMachine = new sfn.StateMachine(this, 'Collect', {

@@ -44,6 +44,9 @@ export class DataStack extends Stack {
       lifecycleRules: [
         // 미완료 멀티파트는 과금되면서 아무 값도 없다.
         { abortIncompleteMultipartUploadAfter: Duration.days(7) },
+        // versioned 버킷에서 --requeue 재수집이 덮어쓴 구버전이 무한 축적된다 —
+        // 90일이면 "실수로 덮어쓴 것을 되살릴" 기간으로 충분하다.
+        { noncurrentVersionExpiration: Duration.days(90) },
       ],
     })
 
@@ -76,7 +79,13 @@ export class DataStack extends Stack {
         imageTagMutability: ecr.TagMutability.IMMUTABLE,
         imageScanOnPush: true,
         removalPolicy: RemovalPolicy.RETAIN,
-        lifecycleRules: [{ maxImageCount: 20, description: '최근 20개만 — 과거는 다이제스트로 이미 기록됨' }],
+        /*
+         * 상한을 넉넉히 둔다. 20으로 뒀더니 다이제스트 고정과 충돌했다 — 실험
+         * 기록에 남은 다이제스트의 **바이트가 만료돼**, 해시만으로는 그 실험을
+         * 같은 이미지로 재실행할 수 없게 된다. 이미지당 ~500MB × 100개라야
+         * 월 수 달러다. 재현성이 걸린 저장소에서는 지우지 않는 쪽이 싸다.
+         */
+        lifecycleRules: [{ maxImageCount: 100, description: '실험 기록에 남은 다이제스트의 바이트를 보존한다' }],
       })
 
     this.repos = {

@@ -203,7 +203,9 @@ export class ShardStack extends Stack {
       logging: logging('worker'),
       environment: {
         BASE_URL: baseUrl,
-        UGRP_EXPERIMENT: collection.experiment,
+        // UGRP_EXPERIMENT는 두지 않는다 — run.mjs는 소비하지 않고, 데이터
+        // 네임스페이스는 command의 --name이 결정한다. 태스크 정의를 읽는 사람이
+        // 이 변수가 S3 프리픽스를 정한다고 오해하는 이중 소스였다.
         UGRP_RESULTS_BUCKET: props.results.bucketName,
         UGRP_CHECKPOINT_TABLE: props.checkpoint.tableName,
         UGRP_SHARD_INDEX: String(index),

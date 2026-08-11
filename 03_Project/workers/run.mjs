@@ -250,6 +250,17 @@ const FAILURE_STREAK_LIMIT = Number(arg('failure-streak-limit', 15))
 const startedAt = Date.now()
 
 for (const [level, group] of byLoad) {
+  /*
+   * 그룹 전체가 이미 완료됐으면 캘리브레이션 자체를 건너뛴다. 셀 단위 has() 확인은
+   * 343행에도 있지만 그건 캘리브레이션(원격은 지속 확인 3분 × 최대 4회 ≈ 15~20분) +
+   * 부하 기동·안정화가 끝난 뒤라, 재개할 때마다 이미 끝난 부하 수준에서 수십 분을
+   * 태우고 불필요한 부하까지 건다.
+   */
+  if (group.every((c) => ckpt.has(cellId(c)))) {
+    console.log(`\n[부하 ${level}] ${group.length}셀 전부 완료 — 캘리브레이션 생략`)
+    continue
+  }
+
   const target = level === 'idle' ? 0 : (profile.targets?.[level] ?? null)
 
   /*

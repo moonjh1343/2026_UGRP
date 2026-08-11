@@ -54,6 +54,12 @@ let saturated = 0
 
 for (const [type, list] of sizeByType) {
   if (PAYLOAD_INVARIANT_TYPES.has(type)) continue
+  /*
+   * 크기 축 기준으로 정렬한 뒤 인접 쌍을 비교한다. 라우트 테이블 순서를 그대로
+   * 믿으면 순서가 크기 오름차순이 아니게 되는 순간 엉뚱한 쌍을 비교한다 —
+   * axis 필드를 계산해 놓고 정렬에 쓰지 않던 것이 그 상태였다.
+   */
+  list.sort((a, b) => a.axis - b.axis)
   for (let i = 1; i < list.length; i++) {
     const prev = list[i - 1]
     const cur = list[i]

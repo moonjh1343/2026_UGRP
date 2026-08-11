@@ -65,7 +65,14 @@ for (const r of dump.renders) {
 }
 
 let failed = 0
-const REQUIRED_METRICS = ['LCP', 'TTFB']
+/*
+ * TBT도 필수다. 이 게이트의 주장이 "LCP/TTFB/TBT 검증"인데 TBT를 출력만 하고
+ * 요구하지 않으면, longtask 관측자 회귀가 2단계를 통과하고 — 3단계의 승자 판정도
+ * TBT 유한성 검사에 걸리기 전까지는 같은 결측을 연달아 놓친다.
+ * INP는 요구하지 않는다: 상호작용→next-paint 타이밍이 확정되기 전에 페이지를
+ * 떠나면 정당하게 결측일 수 있어, 여기서 강제하면 게이트가 불안정해진다.
+ */
+const REQUIRED_METRICS = ['LCP', 'TTFB', 'TBT']
 
 console.log(`\n라우트 ${SLUG} — 상관 ID 조인 검증\n`)
 

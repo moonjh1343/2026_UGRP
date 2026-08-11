@@ -72,6 +72,8 @@ if (!islands || !ssr) {
   )
 } else if (islands.found['트리 루트']) {
   console.log('  FAIL Islands 번들에 트리가 포함됨 — 서버 그래프에 머물지 못했다')
+  // FAIL을 출력만 하고 exit 0이면 CI에서 잡을 방법이 없다 — 경계 심 회귀가 통과한다.
+  process.exitCode = 1
   console.log('       모드별 렌더 모듈이나 페이지 파일이 *.client를 임포트하는지 확인하라')
 } else {
   console.log('  ?    SSR 번들에도 트리가 없다 — 마커 문자열이 컴파일에서 사라졌을 수 있다')

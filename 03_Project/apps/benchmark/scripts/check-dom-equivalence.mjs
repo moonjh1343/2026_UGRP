@@ -81,4 +81,14 @@ if (failed > 0) {
   console.error(`\n${failed}/${compared}건 불일치 — 1단계 검증 실패`)
   process.exit(1)
 }
+/*
+ * 공허 통과 방지. 라우트 테이블 회귀로 전 유형이 skip되면 compared=0인 채
+ * "전부 동일 — 통과"가 나온다 — 비교가 실제로 일어났는지도 합격 조건이다.
+ * 5개 유형 × (후보 − 기준 ssr) 이므로 정상 범위는 15건 이상이다.
+ */
+const MIN_COMPARISONS = 10
+if (compared < MIN_COMPARISONS) {
+  console.error(`\n비교가 ${compared}건뿐이다(기대 ≥ ${MIN_COMPARISONS}) — 라우트 테이블이나 후보 계산의 회귀 의심`)
+  process.exit(1)
+}
 console.log(`\n${compared}건 비교, 전부 DOM 동일 — 1단계 검증 통과`)

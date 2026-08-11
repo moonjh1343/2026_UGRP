@@ -53,22 +53,50 @@ async function walk(dir) {
 
 console.log('\nA. 경계 — 정책과 앱이 서로를 임포트하지 않는가\n')
 
+/*
+ * 임포트 출처를 넓게 잡는다. `from '...'`(정적)과 `import('...')`(동적) 모두,
+ * 경로는 별칭(@/)만이 아니라 상대 경로(../policy)도 본다 — 별칭만 검사하면
+ * 상대 임포트 하나로 게이트가 뚫린 채 초록불이 난다.
+ */
+const importSpecifiers = (src) =>
+  [...src.matchAll(/(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g)].map((m) => m[1])
+
 const appFiles = (await Promise.all(APP_DIRS.map(walk))).flat()
 const leaks = []
 for (const f of appFiles) {
   const src = await readFile(new URL(f, ROOT), 'utf8')
-  if (/from\s+['"]@\/policy/.test(src)) leaks.push(f)
+  for (const spec of importSpecifiers(src)) {
+    if (spec.startsWith('@/policy') || /(^|\/)policy(\/|$)/.test(spec.replace(/^[./]+/, ''))) {
+      leaks.push(`${f} ← ${spec}`)
+    }
+  }
 }
-if (leaks.length) fail(`앱 렌더 경로가 @/policy를 임포트한다: ${leaks.join(', ')}`)
-else ok(`앱 렌더 경로 ${appFiles.length}개 파일 — @/policy 임포트 없음`)
+if (leaks.length) fail(`앱 렌더 경로가 policy를 임포트한다: ${leaks.join(', ')}`)
+else ok(`앱 렌더 경로 ${appFiles.length}개 파일 — policy 임포트 없음`)
 
+/*
+ * Node builtin 목록 — `node:` 접두사 없는 옛 표기도 잡는다. `from 'fs'` 하나가
+ * Lambda@Edge 번들에서야 깨지면 게이트가 있었던 의미가 없다.
+ */
+const NODE_BUILTINS = new Set([
+  'assert', 'buffer', 'child_process', 'crypto', 'dns', 'events', 'fs', 'http', 'https',
+  'net', 'os', 'path', 'process', 'stream', 'tls', 'url', 'util', 'worker_threads', 'zlib',
+])
 const policyFiles = await walk(POLICY_DIR)
 const backRefs = []
 for (const f of policyFiles) {
   const src = await readFile(new URL(f, ROOT), 'utf8')
-  if (/from\s+['"]@\/(app|components)\//.test(src)) backRefs.push(f)
-  // 엣지 이식성: Lambda@Edge로 떼어낼 때 Node 전용 API가 있으면 그대로 깨진다
-  if (/from\s+['"]node:/.test(src)) backRefs.push(`${f} (node: 임포트)`)
+  for (const spec of importSpecifiers(src)) {
+    // 앱 의존: app·components 전부와, 렌더 경로로 취급하는 @/lib 하위까지.
+    // policy가 합법적으로 쓰는 것은 타입·상수 전용 모듈뿐이다: @/lib/modes,
+    // @/lib/routes, @/lib/instrument/correlation(헤더·쿠키 이름 정의).
+    if (/^@\/(app|components)\//.test(spec)) backRefs.push(`${f} ← ${spec}`)
+    else if (/^@\/lib\//.test(spec) && !/^@\/lib\/(modes|routes|instrument\/correlation)$/.test(spec)) {
+      backRefs.push(`${f} ← ${spec}`)
+    }
+    else if (/^\.\.\/(app|components|lib)\//.test(spec)) backRefs.push(`${f} ← ${spec} (상대 경로)`)
+    else if (spec.startsWith('node:') || NODE_BUILTINS.has(spec)) backRefs.push(`${f} ← ${spec} (Node API)`)
+  }
 }
 if (backRefs.length) fail(`policy/가 앱 또는 Node API에 의존한다: ${backRefs.join(', ')}`)
 else ok(`policy/ ${policyFiles.length}개 파일 — 앱·Node 의존 없음`)
@@ -242,10 +270,22 @@ console.log('\nE. 세션 전환 상한 (세션·라우트당 1회)\n')
   }
   await ctx.close()
 
-  const capped = seen.find((s) => s.reason === 'session-cap')
   console.log(`  ${seen.map((s) => `${s.policy}→${s.mode}(${s.reason})`).join('  ')}`)
-  if (capped) ok(`전환 상한 발동 — ${capped.mode} 유지`)
-  else fail('세 번째 요청에서 전환 상한이 발동하지 않았다 (ssr→csr로 이미 1회 전환했다)')
+  /*
+   * 세 단계 모두 단언한다. "session-cap이라는 사유가 어딘가에 있다"만 보면
+   * 상한이 0으로 굳은 서버(2회차부터 cap, 전환이 아예 불가능)도 통과한다 —
+   * 명세는 "2회차는 전환 1회 허용, 3회차는 2회차 모드 유지"다.
+   */
+  const [first, second, third] = seen
+  if (second.mode !== 'csr' || second.reason === 'session-cap') {
+    fail(`2회차가 csr로 전환되지 않았다 (${second.mode}, ${second.reason}) — 상한이 1이 아니라 0으로 동작한다`)
+  } else if (third.reason !== 'session-cap') {
+    fail(`3회차에서 전환 상한이 발동하지 않았다 (${third.mode}, ${third.reason}) — ssr→csr로 이미 1회 전환했다`)
+  } else if (third.mode !== second.mode) {
+    fail(`상한 발동 시 유지된 모드가 2회차와 다르다 (${second.mode} → ${third.mode})`)
+  } else {
+    ok(`전환 1회 허용 후 상한 발동 — ${third.mode} 유지 (${first.mode}→${second.mode}→${third.mode})`)
+  }
 }
 
 await browser.close()

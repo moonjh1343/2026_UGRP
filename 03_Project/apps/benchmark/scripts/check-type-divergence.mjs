@@ -73,13 +73,17 @@ const { types, routes } = await loadRoutes()
 await fetch(`${BASE}/api/internal/records`, { method: 'DELETE' })
 
 const browser = await chromium.launch()
-const plan = []
 
 for (const type of types) {
   const route = representative(routes, type)
   for (const mode of route.candidateModes) {
+    /*
+     * ssg는 캐시 상태를 고정한다(HIT). 안 하면 rep1=MISS, rep2·3=HIT처럼 섞이고,
+     * 이전 실행이 캐시를 남겼는지에 따라 게이트 결과가 실행 이력에 의존한다 —
+     * 본수집(measure.mjs)이 prepareCache로 통제하는 것과 같은 이유다.
+     */
+    if (mode === 'ssg') await fetch(pageUrl(mode, type, route.key)).then((r) => r.arrayBuffer())
     for (let i = 0; i < REPEATS; i++) await visit(browser, mode, type, route.key)
-    plan.push({ type, key: route.key, mode, route })
   }
 }
 
@@ -106,7 +110,21 @@ let missing = 0
 for (const type of types) {
   const route = representative(routes, type)
   const rows = route.candidateModes.map((m) => collect(m, route.key))
-  const usable = rows.filter((r) => Number.isFinite(r.lcp))
+  /*
+   * **LCP와 TBT 둘 다 유한해야 한다.** LCP만 거르면 TBT 결측 모드의 score가
+   * NaN이 되고, sort 비교자가 NaN을 반환하면 순서가 구현 정의라 승자가 후보
+   * 배열의 첫 모드로 "정해진다" — TBT 수집이 통째로 회귀해도(longtask 관측자
+   * 등) 이 게이트가 그럴듯한 승자 표를 내며 통과하는 경로였다.
+   */
+  const usable = rows.filter((r) => Number.isFinite(r.lcp) && Number.isFinite(r.tbt))
+  const nanOnly = rows.filter((r) => Number.isFinite(r.lcp) && !Number.isFinite(r.tbt))
+  if (nanOnly.length) {
+    console.error(
+      `${type}/${route.key} — TBT 결측 모드: ${nanOnly.map((r) => r.mode).join(', ')} ` +
+        '(LCP는 있는데 TBT가 없다 — 수집 회귀 의심)',
+    )
+    process.exitCode = 1
+  }
   if (usable.length === 0) {
     missing++
     console.log(`${type}/${route.key} — 비콘 미수집\n`)

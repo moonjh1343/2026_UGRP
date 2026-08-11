@@ -1,5 +1,5 @@
 {
-  "version": "trained-20260811T072910Z",
+  "version": "trained-20260811T082547Z",
   "distilledFrom": {
     "nSeeds": 5,
     "alpha": 0.3,
@@ -7,6 +7,8 @@
   },
   "trainedOn": {
     "nRows": 35988,
+    "nTrainRows": 26390,
+    "nCells": 1200,
     "experiments": [
       "slice-b2"
     ]
@@ -15,17 +17,16 @@
   "maxDepthBudget": 5,
   "target": "J_hat",
   "unit": "라우트별 z-정규화된 QoE 비용 + λ·ServerCost (낮을수록 좋음)",
-  "warning": null,
+  "warning": "셀 커버리지 1200/10400 (11.5%) — 행 수(35988)가 커 보여도 그리드의 일부다. 이 트리를 실배포 판단에 쓰지 말 것.",
   "features": [
     "bundleKB",
     "cpuPct",
     "deviceTier",
     "downlinkMbps",
-    "eventLoopP95Ms",
+    "interactiveCount",
     "mode",
-    "nodeCount",
-    "rttMs",
-    "seoWeight"
+    "personalizedRatio",
+    "rttMs"
   ],
   "modeIndex": {
     "csr": 0,
@@ -35,111 +36,111 @@
     "islands": 4
   },
   "root": {
-    "feature": "nodeCount",
-    "threshold": 3250.0,
+    "feature": "personalizedRatio",
+    "threshold": 0.6,
     "left": {
-      "feature": "bundleKB",
-      "threshold": 569.975,
+      "feature": "interactiveCount",
+      "threshold": 4.5,
       "left": {
-        "feature": "deviceTier",
-        "threshold": 3.5,
+        "feature": "mode",
+        "threshold": 2.5,
         "left": {
-          "feature": "cpuPct",
-          "threshold": 98.6838,
+          "feature": "deviceTier",
+          "threshold": 2.5,
           "left": {
-            "feature": "cpuPct",
-            "threshold": 61.6763,
+            "feature": "rttMs",
+            "threshold": 275.0,
             "left": {
-              "leaf": 1.6784
+              "leaf": 1.5628
             },
             "right": {
-              "leaf": 2.6299
+              "leaf": 2.2434
             }
           },
           "right": {
-            "feature": "bundleKB",
-            "threshold": 569.46,
+            "feature": "downlinkMbps",
+            "threshold": 1.0,
             "left": {
-              "leaf": 13.2176
+              "leaf": 1.4655
             },
             "right": {
-              "leaf": 3.4553
+              "leaf": 0.8162
             }
           }
         },
         "right": {
-          "feature": "cpuPct",
-          "threshold": 58.8466,
+          "feature": "mode",
+          "threshold": 3.5,
           "left": {
-            "feature": "cpuPct",
-            "threshold": 29.9481,
+            "feature": "deviceTier",
+            "threshold": 2.5,
             "left": {
-              "leaf": 0.8503
+              "leaf": 0.3038
             },
             "right": {
-              "leaf": 6.4055
+              "leaf": -0.4511
             }
           },
           "right": {
-            "feature": "rttMs",
-            "threshold": 275.0,
+            "feature": "deviceTier",
+            "threshold": 2.5,
             "left": {
-              "leaf": -1.7675
+              "leaf": 1.76
             },
             "right": {
-              "leaf": 0.591
+              "leaf": 1.0075
             }
           }
         }
       },
       "right": {
-        "feature": "mode",
+        "feature": "deviceTier",
         "threshold": 2.5,
         "left": {
-          "feature": "downlinkMbps",
-          "threshold": 1.0,
+          "feature": "cpuPct",
+          "threshold": 57.9618,
           "left": {
-            "feature": "bundleKB",
-            "threshold": 570.945,
+            "feature": "rttMs",
+            "threshold": 275.0,
             "left": {
-              "leaf": 1.9286
+              "leaf": 1.8986
             },
             "right": {
-              "leaf": 3.8337
+              "leaf": 2.5432
             }
           },
           "right": {
-            "feature": "seoWeight",
-            "threshold": 0.6,
+            "feature": "rttMs",
+            "threshold": 650.0,
             "left": {
-              "leaf": -2.0339
+              "leaf": 2.69
             },
             "right": {
-              "leaf": 1.3139
+              "leaf": 3.2543
             }
           }
         },
         "right": {
-          "feature": "deviceTier",
-          "threshold": 2.5,
+          "feature": "rttMs",
+          "threshold": 650.0,
           "left": {
-            "feature": "cpuPct",
-            "threshold": 55.7678,
+            "feature": "bundleKB",
+            "threshold": 570.175,
             "left": {
-              "leaf": -0.5146
+              "leaf": 1.7872
             },
             "right": {
-              "leaf": 0.2021
+              "leaf": 1.0109
             }
           },
           "right": {
-            "feature": "cpuPct",
-            "threshold": 85.6721,
+            "feature": "bundleKB",
+            "threshold": 570.175,
             "left": {
-              "leaf": -0.9901
+              "leaf": 2.1617
             },
             "right": {
-              "leaf": -0.44
+              "leaf": 2.5627
             }
           }
         }
@@ -149,29 +150,29 @@
       "feature": "mode",
       "threshold": 0.5,
       "left": {
-        "feature": "cpuPct",
-        "threshold": 29.1628,
+        "feature": "downlinkMbps",
+        "threshold": 1.0,
         "left": {
-          "feature": "deviceTier",
-          "threshold": 2.5,
+          "feature": "downlinkMbps",
+          "threshold": 0.325,
           "left": {
-            "feature": "eventLoopP95Ms",
-            "threshold": 5.8491,
+            "feature": "deviceTier",
+            "threshold": 2.5,
             "left": {
-              "leaf": 5.6551
+              "leaf": 6.6197
             },
             "right": {
-              "leaf": 5.7721
+              "leaf": 5.9398
             }
           },
           "right": {
-            "feature": "cpuPct",
-            "threshold": 26.5931,
+            "feature": "deviceTier",
+            "threshold": 2.5,
             "left": {
-              "leaf": 5.4531
+              "leaf": 5.8999
             },
             "right": {
-              "leaf": 5.5692
+              "leaf": 5.2562
             }
           }
         },
@@ -180,22 +181,22 @@
           "threshold": 2.5,
           "left": {
             "feature": "cpuPct",
-            "threshold": 92.087,
+            "threshold": 29.9889,
             "left": {
-              "leaf": 6.0875
+              "leaf": 4.7705
             },
             "right": {
-              "leaf": 6.4057
+              "leaf": 5.3846
             }
           },
           "right": {
-            "feature": "rttMs",
-            "threshold": 30.0,
+            "feature": "cpuPct",
+            "threshold": 65.6613,
             "left": {
-              "leaf": 5.4326
+              "leaf": 4.3488
             },
             "right": {
-              "leaf": 5.8069
+              "leaf": 4.6585
             }
           }
         }
@@ -204,26 +205,26 @@
         "feature": "mode",
         "threshold": 1.5,
         "left": {
-          "feature": "cpuPct",
-          "threshold": 44.8823,
+          "feature": "deviceTier",
+          "threshold": 1.5,
           "left": {
             "feature": "cpuPct",
-            "threshold": 29.4441,
+            "threshold": 46.4716,
             "left": {
-              "leaf": 28.5998
+              "leaf": 28.8909
             },
             "right": {
-              "leaf": 28.7324
+              "leaf": 30.0716
             }
           },
           "right": {
             "feature": "deviceTier",
             "threshold": 2.5,
             "left": {
-              "leaf": 29.1578
+              "leaf": 28.9029
             },
             "right": {
-              "leaf": 28.8613
+              "leaf": 28.4944
             }
           }
         },
@@ -231,28 +232,28 @@
           "feature": "mode",
           "threshold": 3.0,
           "left": {
-            "feature": "cpuPct",
-            "threshold": 56.437,
+            "feature": "deviceTier",
+            "threshold": 1.5,
             "left": {
-              "leaf": 40.1293
+              "leaf": 42.1301
             },
             "right": {
-              "leaf": 41.2372
+              "leaf": 41.291
             }
           },
           "right": {
-            "feature": "cpuPct",
-            "threshold": 61.9884,
+            "feature": "deviceTier",
+            "threshold": 1.5,
             "left": {
-              "leaf": 31.8475
+              "leaf": 32.2088
             },
             "right": {
-              "leaf": 32.4468
+              "leaf": 31.459
             }
           }
         }
       }
     }
   },
-  "generatedAt": "2026-08-11T07:29:10.375824+00:00"
+  "generatedAt": "2026-08-11T08:25:47.593643+00:00"
 }

@@ -46,6 +46,8 @@ const collection: CollectionConfig = {
     Number(app.node.tryGetContext('ugrp:shardCount') ?? DEFAULT_COLLECTION.totalShards),
     'collection',
   ),
+  // -c ugrp:spot=true — CLI 컨텍스트는 문자열로 온다.
+  spot: String(app.node.tryGetContext('ugrp:spot') ?? DEFAULT_COLLECTION.spot) === 'true',
 }
 
 const prefix = `Ugrp-${collection.experiment}`
@@ -86,15 +88,24 @@ if (haveAll) {
   shards.addStackDependency(network, 'VPC·보안 그룹')
   shards.addStackDependency(data, 'ECR 이미지·결과 버킷·체크포인트 테이블')
 
-  const orchestration = new OrchestrationStack(app, `${prefix}-Orchestration`, {
-    env,
-    vpc: network.vpc,
-    workerSg: network.workerSg,
-    cluster: shards.cluster,
-    workerTaskDefinitions: shards.workerTaskDefinitions,
-    collection,
-  })
-  orchestration.addStackDependency(shards, 'ECS 클러스터·워커 태스크 정의')
+  /*
+   * Spot 모드에서는 Orchestration을 만들지 않는다. 워커가 서비스로 돌므로 Step
+   * Functions RunTask가 같은 태스크 정의를 또 띄우면 한 샤드에 워커가 둘이 되고,
+   * 같은 셀을 이중 측정하며 부하 캘리브레이션을 서로 밟는다.
+   */
+  if (!collection.spot) {
+    const orchestration = new OrchestrationStack(app, `${prefix}-Orchestration`, {
+      env,
+      vpc: network.vpc,
+      workerSg: network.workerSg,
+      cluster: shards.cluster,
+      workerTaskDefinitions: shards.workerTaskDefinitions,
+      collection,
+    })
+    orchestration.addStackDependency(shards, 'ECS 클러스터·워커 태스크 정의')
+  } else {
+    console.error(`[${prefix}] Spot 모드 — 워커는 서비스로 돌고 Orchestration 스택은 만들지 않는다.`)
+  }
 } else {
   console.error(
     `[${prefix}] 샤드 스택을 건너뛴다 — 이미지 다이제스트가 없다.\n` +

@@ -121,6 +121,18 @@ export interface CollectionConfig {
    * cdk.json에 커밋한다(재현성 요구사항: 조건 그리드는 버전 관리되는 코드에 둔다).
    */
   filters: string[]
+  /**
+   * Fargate Spot 모드 (`-c ugrp:spot=true`).
+   *
+   * 세 태스크 전부 Spot으로 돌리고, 워커를 RunTask(Step Functions)가 아니라
+   * **desiredCount=1 서비스**로 바꾼다. 중단되면 ECS가 다시 띄우고 run.mjs가
+   * 체크포인트에서 재개한다 — 완료된 부하 그룹은 캘리브레이션을 생략하므로 재개
+   * 비용이 작다. 온디맨드 대비 ~65-70% 절감이 목적이고, 대가는 중단 시 벽시계와
+   * Spot 하드웨어 이동으로 인한 재캘리브레이션이다(행별 serverCpuPct가 실측
+   * 근거로 남는다). Spot 모드에서는 Orchestration 스택을 만들지 않는다 — 서비스와
+   * RunTask가 같은 워커를 이중으로 띄우는 사고를 구조적으로 막는다.
+   */
+  spot: boolean
 }
 
 export const DEFAULT_COLLECTION: CollectionConfig = {
@@ -130,6 +142,7 @@ export const DEFAULT_COLLECTION: CollectionConfig = {
   totalShards: 20,
   seed: 'ugrp-2026',
   filters: [],
+  spot: false,
 }
 
 /** `ugrp:filters`로 줄 수 있는 축. `run.mjs`의 플래그 이름과 같다. */

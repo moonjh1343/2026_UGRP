@@ -1,81 +1,258 @@
 {
-  "version": "v0-unfitted",
-  "distilledFrom": null,
-  "trainedOn": null,
-  "maxDepth": 4,
+  "version": "trained-20260811T072910Z",
+  "distilledFrom": {
+    "nSeeds": 5,
+    "alpha": 0.3,
+    "boostRounds": 200
+  },
+  "trainedOn": {
+    "nRows": 35988,
+    "experiments": [
+      "slice-b2"
+    ]
+  },
+  "maxDepth": 5,
   "maxDepthBudget": 5,
   "target": "J_hat",
-  "unit": "라우트별 z-정규화된 QoE 비용 (낮을수록 좋음)",
-  "warning": "학습된 모델이 아니다. 3단계 실측(CPU 4× · 3G Fast · n=8, 단일 조건)에서 손으로 유도한 자리표시자이며, 결정 계층의 배선과 오버헤드를 검증하기 위한 것이다. 5단계 factorial 데이터로 LightGBM을 학습하고 깊이 5로 증류해 이 파일을 교체한다. 이 상태의 예측값을 연구 결과로 인용해서는 안 된다.",
+  "unit": "라우트별 z-정규화된 QoE 비용 + λ·ServerCost (낮을수록 좋음)",
+  "warning": null,
   "features": [
-    "mode",
-    "effectiveTypeIdx",
+    "bundleKB",
+    "cpuPct",
     "deviceTier",
-    "payloadKB",
-    "fetchDelayMs",
-    "interactiveCount",
-    "cpuPct"
+    "downlinkMbps",
+    "eventLoopP95Ms",
+    "mode",
+    "nodeCount",
+    "rttMs",
+    "seoWeight"
   ],
-  "modeIndex": { "csr": 0, "ssr": 1, "stream": 2, "ssg": 3, "islands": 4 },
+  "modeIndex": {
+    "csr": 0,
+    "ssr": 1,
+    "stream": 2,
+    "ssg": 3,
+    "islands": 4
+  },
   "root": {
-    "feature": "mode",
-    "threshold": 0.5,
+    "feature": "nodeCount",
+    "threshold": 3250.0,
     "left": {
-      "_comment": "csr — 3단계에서 모든 유형·모든 인스턴스에서 명확한 열위였다. 저대역에서 셸→JS→API의 추가 왕복이 지배한다.",
-      "feature": "effectiveTypeIdx",
-      "threshold": 2.5,
+      "feature": "bundleKB",
+      "threshold": 569.975,
       "left": {
-        "feature": "payloadKB",
-        "threshold": 100,
-        "left": { "leaf": 2.6 },
-        "right": { "leaf": 3.5 }
+        "feature": "deviceTier",
+        "threshold": 3.5,
+        "left": {
+          "feature": "cpuPct",
+          "threshold": 98.6838,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 61.6763,
+            "left": {
+              "leaf": 1.6784
+            },
+            "right": {
+              "leaf": 2.6299
+            }
+          },
+          "right": {
+            "feature": "bundleKB",
+            "threshold": 569.46,
+            "left": {
+              "leaf": 13.2176
+            },
+            "right": {
+              "leaf": 3.4553
+            }
+          }
+        },
+        "right": {
+          "feature": "cpuPct",
+          "threshold": 58.8466,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 29.9481,
+            "left": {
+              "leaf": 0.8503
+            },
+            "right": {
+              "leaf": 6.4055
+            }
+          },
+          "right": {
+            "feature": "rttMs",
+            "threshold": 275.0,
+            "left": {
+              "leaf": -1.7675
+            },
+            "right": {
+              "leaf": 0.591
+            }
+          }
+        }
       },
       "right": {
-        "feature": "deviceTier",
+        "feature": "mode",
         "threshold": 2.5,
-        "left": { "leaf": 1.6 },
-        "right": { "leaf": 1.1 }
+        "left": {
+          "feature": "downlinkMbps",
+          "threshold": 1.0,
+          "left": {
+            "feature": "bundleKB",
+            "threshold": 570.945,
+            "left": {
+              "leaf": 1.9286
+            },
+            "right": {
+              "leaf": 3.8337
+            }
+          },
+          "right": {
+            "feature": "seoWeight",
+            "threshold": 0.6,
+            "left": {
+              "leaf": -2.0339
+            },
+            "right": {
+              "leaf": 1.3139
+            }
+          }
+        },
+        "right": {
+          "feature": "deviceTier",
+          "threshold": 2.5,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 55.7678,
+            "left": {
+              "leaf": -0.5146
+            },
+            "right": {
+              "leaf": 0.2021
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 85.6721,
+            "left": {
+              "leaf": -0.9901
+            },
+            "right": {
+              "leaf": -0.44
+            }
+          }
+        }
       }
     },
     "right": {
       "feature": "mode",
-      "threshold": 2.5,
+      "threshold": 0.5,
       "left": {
-        "feature": "mode",
-        "threshold": 1.5,
+        "feature": "cpuPct",
+        "threshold": 29.1628,
         "left": {
-          "_comment": "ssr — 서버 지연이 커지면 TTFB가 그대로 밀린다",
-          "feature": "fetchDelayMs",
-          "threshold": 15,
-          "left": { "leaf": 0.75 },
-          "right": { "leaf": 0.95 }
+          "feature": "deviceTier",
+          "threshold": 2.5,
+          "left": {
+            "feature": "eventLoopP95Ms",
+            "threshold": 5.8491,
+            "left": {
+              "leaf": 5.6551
+            },
+            "right": {
+              "leaf": 5.7721
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 26.5931,
+            "left": {
+              "leaf": 5.4531
+            },
+            "right": {
+              "leaf": 5.5692
+            }
+          }
         },
         "right": {
-          "_comment": "stream — 셸을 먼저 흘려보내므로 서버 지연에 덜 민감하다",
-          "feature": "fetchDelayMs",
-          "threshold": 15,
-          "left": { "leaf": 0.8 },
-          "right": { "leaf": 0.78 }
+          "feature": "deviceTier",
+          "threshold": 2.5,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 92.087,
+            "left": {
+              "leaf": 6.0875
+            },
+            "right": {
+              "leaf": 6.4057
+            }
+          },
+          "right": {
+            "feature": "rttMs",
+            "threshold": 30.0,
+            "left": {
+              "leaf": 5.4326
+            },
+            "right": {
+              "leaf": 5.8069
+            }
+          }
         }
       },
       "right": {
         "feature": "mode",
-        "threshold": 3.5,
+        "threshold": 1.5,
         "left": {
-          "_comment": "ssg — 부하가 높을수록 이득이 커진다(요청당 렌더 비용이 거의 0)",
           "feature": "cpuPct",
-          "threshold": 70,
-          "left": { "leaf": 0.55 },
-          "right": { "leaf": 0.5 }
+          "threshold": 44.8823,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 29.4441,
+            "left": {
+              "leaf": 28.5998
+            },
+            "right": {
+              "leaf": 28.7324
+            }
+          },
+          "right": {
+            "feature": "deviceTier",
+            "threshold": 2.5,
+            "left": {
+              "leaf": 29.1578
+            },
+            "right": {
+              "leaf": 28.8613
+            }
+          }
         },
         "right": {
-          "_comment": "islands — 위젯이 많을수록 하이드레이션 절감이 커진다",
-          "feature": "interactiveCount",
-          "threshold": 12,
-          "left": { "leaf": 0.8 },
-          "right": { "leaf": 0.72 }
+          "feature": "mode",
+          "threshold": 3.0,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 56.437,
+            "left": {
+              "leaf": 40.1293
+            },
+            "right": {
+              "leaf": 41.2372
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 61.9884,
+            "left": {
+              "leaf": 31.8475
+            },
+            "right": {
+              "leaf": 32.4468
+            }
+          }
         }
       }
     }
-  }
+  },
+  "generatedAt": "2026-08-11T07:29:10.375824+00:00"
 }

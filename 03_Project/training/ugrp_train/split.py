@@ -50,7 +50,9 @@ def time_and_group_split(
             stacklevel=2,
         )
         rng = np.random.default_rng(seed)
-        groups = df[group_col].unique()
+        # pandas 3.0의 unique()는 ArrowStringArray를 돌려주는데, view 의미론을 가진
+        # 배열의 in-place shuffle은 보장이 없다(런타임 경고). ndarray로 복사해 섞는다.
+        groups = np.asarray(df[group_col].unique())
         rng.shuffle(groups)
         n_test_groups = max(1, int(len(groups) * test_frac))
         test_groups = set(groups[:n_test_groups])

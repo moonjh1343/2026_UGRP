@@ -27,7 +27,10 @@ def distill_tree(
     앙상블이 평활화한 함수 모양을 트리가 흉내 내게 하는 것이 증류의 목적이다.
     원본 라벨로 직접 학습하면 앙상블이 걸러낸 노이즈를 트리가 다시 주워 담는다.
     """
-    tree = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_samples_leaf)
+    # random_state 고정 — splitter='best'도 동률 분기에서 피처 순열을 난수로
+    # 고르므로, 지정하지 않으면 같은 입력에서 실행마다 다른 트리가 나온다.
+    # 배포 산출물이 실행마다 달라지면 시드 기록이 재현을 보장하지 못한다.
+    tree = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_samples_leaf, random_state=0)
     tree.fit(X[FEATURE_ORDER], ensemble_target)
     return tree
 

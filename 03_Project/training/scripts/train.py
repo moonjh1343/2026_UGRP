@@ -129,6 +129,8 @@ def main() -> None:
         pred_mean, pred_std = model.ensemble_predict(boosters, test_X)
         test_df["predJ"] = pred_mean
         test_df["predJStd"] = pred_std
+        # rule-based 기준선의 busy 분기(cpuPct > 80)가 쓸 조건별 서버 CPU
+        test_df["cpuPct"] = test_X["cpuPct"].to_numpy()
 
         cond = evaluate.aggregate_by_condition(test_df)
         pred_cond = test_df.groupby([*evaluate.GROUP_KEYS, "mode"])["predJ"].mean().reset_index()
@@ -141,16 +143,34 @@ def main() -> None:
         from ugrp_train.config import MODES
 
         for fixed_mode in MODES:
-            cond[f"pred_{fixed_mode}"] = np.where(cond["mode"] == fixed_mode, -1e9, 1e9)
-            r = evaluate.evaluate_policy(cond, f"pred_{fixed_mode}")
-            print(evaluate.format_report(f"fixed-{fixed_mode}", r))
+            # **실행 불가능 조건은 제외한다.** M(r)에 이 모드가 없는 조건에서
+            # ±1e9 인코딩은 argmin을 정렬상 첫 후보(대개 csr)로 흘려보낸다 —
+            # "infeasible 폴백을 조용히 하는 정책은 기준선으로 못 쓴다"(CLAUDE.md)는
+            # 원칙 그대로다. fixed-ssg의 대시보드·폼 성적은 사실 fixed-csr 성적이었다.
+            feasible = cond.groupby(evaluate.GROUP_KEYS)["mode"].transform(
+                lambda s, m=fixed_mode: (s == m).any()
+            )
+            sub = cond[feasible].copy()
+            n_excluded = cond.loc[~feasible].groupby(evaluate.GROUP_KEYS).ngroups
+            if len(sub) == 0:
+                print(f"  fixed-{fixed_mode:8s}  실행 가능한 조건 없음 — 제외")
+                continue
+            sub[f"pred_{fixed_mode}"] = np.where(sub["mode"] == fixed_mode, -1e9, 1e9)
+            r = evaluate.evaluate_policy(sub, f"pred_{fixed_mode}")
+            suffix = f"  (실행 불가 조건 {n_excluded}개 제외)" if n_excluded else ""
+            print(evaluate.format_report(f"fixed-{fixed_mode}", r) + suffix)
 
         # 기준선: policy/policies.ts의 rule-based를 그대로 옮긴 규칙.
         # 조건별 후보 모드 목록을 모아 한 번에 벡터화(merge)로 붙인다 —
         # 행 단위 DataFrame 비교(.all(axis=1))는 pandas 버전에 따라 정렬 오류가 난다.
         group_modes = cond.groupby(evaluate.GROUP_KEYS)["mode"].apply(list).reset_index(name="candidates")
+        # busy 분기(cpuPct > 80)의 입력 — 조건별 실측 서버 CPU 평균
+        cond_cpu = test_df.groupby(evaluate.GROUP_KEYS)["cpuPct"].mean().reset_index(name="condCpuPct")
+        group_modes = group_modes.merge(cond_cpu, on=evaluate.GROUP_KEYS, how="left")
         group_modes["chosenMode"] = model.rule_based_predict_mode(
-            group_modes, group_modes["candidates"].tolist()
+            group_modes,
+            group_modes["candidates"].tolist(),
+            cpu_pct=group_modes["condCpuPct"].fillna(0.0).to_numpy(),
         )
         cond = cond.merge(group_modes[[*evaluate.GROUP_KEYS, "chosenMode"]], on=evaluate.GROUP_KEYS, how="left")
         cond["pred_rule-based"] = np.where(cond["mode"] == cond["chosenMode"], -1e9, 1e9)
@@ -173,23 +193,68 @@ def main() -> None:
     if args.distill:
         print("\n깊이 5 트리 증류 중...")
         from ugrp_train import distill
+        from ugrp_train.config import FEATURE_ORDER
 
         full_pred, _ = model.ensemble_predict(boosters, X)
         tree = distill.distill_tree(X, full_pred)
+
+        # 경고 기준은 행 수가 아니라 **셀 커버리지**다. slice-b2는 35,988행이지만
+        # 그리드의 ~11%다 — 행 수 기준(≥5000)은 "반복이 많은 좁은 슬라이스"를
+        # 전체 데이터처럼 통과시킨다.
+        FULL_GRID_CELLS = 10_400
+        n_cells = int(labeled["cellId"].nunique()) if "cellId" in labeled.columns else 0
+        coverage = n_cells / FULL_GRID_CELLS
+        warning = None if coverage >= 0.5 else (
+            f"셀 커버리지 {n_cells}/{FULL_GRID_CELLS} ({coverage:.1%}) — 행 수({len(labeled)})가 "
+            "커 보여도 그리드의 일부다. 이 트리를 실배포 판단에 쓰지 말 것."
+        )
+
         tree_json = distill.export_tree_json(
             tree,
             version=f"trained-{pd.Timestamp.now(tz='UTC').strftime('%Y%m%dT%H%M%SZ')}",
             distilled_from={"nSeeds": args.seeds, "alpha": args.alpha, "boostRounds": args.boost_rounds},
-            trained_on={"nRows": len(labeled), "experiments": sorted(labeled["experiment"].unique().tolist())},
-            warning=None if len(labeled) >= 5000 else (
-                f"학습 표본 {len(labeled)}행 — 6단계 전체 그리드(31만행)에 비해 매우 적다. "
-                "이 트리를 실배포 판단에 쓰지 말 것."
-            ),
+            trained_on={
+                "nRows": len(labeled),
+                # 부스터가 실제로 본 행 수. nRows(전체)만 적으면 검증 행까지 학습한
+                # 것처럼 읽힌다 — 교사 예측(full_pred)은 전체에 대해 만들지만
+                # 부스터 학습은 train 분할만 썼다.
+                "nTrainRows": int(len(train_idx)),
+                "nCells": n_cells,
+                "experiments": sorted(labeled["experiment"].unique().tolist()),
+            },
+            warning=warning,
         )
         tree_path = out_dir / "tree.json"
         tree_path.write_text(json.dumps(tree_json, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"  → {tree_path}")
         print(f"  사용된 피처: {tree_json['features']}")
+
+        if len(test_idx) > 0:
+            # ── 배포 산출물 검증 — 증류 트리 **자체**를 채점한다 ──────────────
+            # 앙상블만 평가하고 트리를 안 보면 depth-5 절단이 argmin을 뒤집어도
+            # 모든 게이트가 초록인 채 policy/model/로 들어간다(check:tree는
+            # 스키마만 본다). 충실도(대 앙상블)와 조건 단위 성적을 함께 남긴다.
+            tree_pred_test = tree.predict(test_X[FEATURE_ORDER])
+            ens_test = test_df["predJ"].to_numpy()
+            resid = tree_pred_test - ens_test
+            var = float(np.var(ens_test)) or 1.0
+            fidelity_r2 = 1.0 - float(np.mean(resid**2)) / var
+
+            test_df["treeJ"] = tree_pred_test
+            tree_cond = test_df.groupby([*evaluate.GROUP_KEYS, "mode"])["treeJ"].mean().reset_index()
+            cond_tree = cond.merge(tree_cond, on=[*evaluate.GROUP_KEYS, "mode"])
+            tree_result = evaluate.evaluate_policy(cond_tree, "treeJ")
+
+            print(f"  증류 충실도 R² (대 앙상블, 검증 집합) = {fidelity_r2:.3f}")
+            print(evaluate.format_report("distilled-tree", tree_result))
+            distill_report = {
+                "fidelityR2VsEnsemble": fidelity_r2,
+                **{k: v for k, v in tree_result.items() if k != "detail"},
+            }
+            (out_dir / "distill_report.json").write_text(
+                json.dumps(distill_report, indent=2, default=str), encoding="utf-8"
+            )
+            print(f"  증류 평가 → {out_dir / 'distill_report.json'}")
 
 
 if __name__ == "__main__":

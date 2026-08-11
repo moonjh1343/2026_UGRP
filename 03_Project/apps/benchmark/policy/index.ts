@@ -93,6 +93,15 @@ export function decide(input: DecideInput): Decision {
 
   const { mode: intended, scores } = resolved.fn(f, cands)
 
+  /*
+   * 세션의 이전 결정. 쿠키에서 왔으므로 어휘는 session.ts가 걸렀지만, **이 라우트의
+   * M(x)에 속하는지는 여기서만 확인할 수 있다.** 후보 밖 모드가 남아 있으면(배포 간
+   * 후보 축소, 위조 쿠키) 없는 것으로 친다 — session-cap이 그 모드를 복원하면
+   * "mode는 항상 M(x)의 원소" 불변식이 깨진다.
+   */
+  const rawPrior = session.get(key)
+  const prior = rawPrior && cands.includes(rawPrior.mode) ? rawPrior : undefined
+
   let mode = intended
   let reason: DecisionReason = 'policy'
   let margin: number | null = null
@@ -103,17 +112,26 @@ export function decide(input: DecideInput): Decision {
     reason = 'infeasible'
   } else if (scores) {
     /*
-     * 6) 마진 폴백. 상위 두 예측의 차가 τ 미만이면 전환하지 않는다.
+     * 6) 마진 폴백. 상위 두 예측의 차가 τ 미만이면 **전환하지 않는다.**
      *    전환에는 캐시 파편화라는 고정비가 있으므로, 이득이 그보다 작으면 손해다.
      *    3단계 실측에서 대시보드·폼·개인화형의 상위 3개 모드는 노이즈 안에 있었다.
+     *
+     *    "전환하지 않는다"의 기준점은 세션의 이전 모드다. 이전 모드가 있는데
+     *    DEFAULT_MODE로 가면 τ가 막으려던 바로 그 전환을 τ가 유발한다.
+     *    이전 결정이 없으면 기본 모드가 보수적 선택이다.
+     *    폴백이 실제로 모드를 바꿀 때만 reason을 남긴다 — 상위 1위가 이미
+     *    폴백 대상과 같으면 결정은 policy 그대로이고, margin 값은 별도 필드로 남는다.
      */
     const sorted = cands
       .map((m) => ({ m, j: scores[m] ?? Infinity }))
       .sort((a, b) => a.j - b.j)
     margin = sorted.length > 1 ? sorted[1].j - sorted[0].j : Infinity
     if (margin < TAU) {
-      mode = within(cands, DEFAULT_MODE)
-      reason = 'margin'
+      const anchor = prior ? prior.mode : within(cands, DEFAULT_MODE)
+      if (anchor !== mode) {
+        mode = anchor
+        reason = 'margin'
+      }
     }
   }
 
@@ -122,7 +140,6 @@ export function decide(input: DecideInput): Decision {
    *    라우트의 결정이 세션 내내 모든 라우트를 고정해버려, 라우트별로 최적 모드가
    *    다르다는 이 연구의 전제 자체를 부정하게 된다.
    */
-  const prior = session.get(key)
   if (prior && prior.mode !== mode) {
     if (prior.switches >= SESSION_SWITCH_CAP) {
       mode = prior.mode

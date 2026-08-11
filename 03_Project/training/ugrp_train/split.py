@@ -38,6 +38,17 @@ def time_and_group_split(
     if len(test_idx) == 0 or len(train_idx) == 0:
         # 라우트 수가 적으면(파일럿 등) 시간 경계가 전부 한쪽으로 쏠릴 수 있다.
         # 이 경우 그룹 단위로만 분할해 최소한의 홀드아웃을 보장한다.
+        #
+        # **말없이 폴백하면 안 된다.** 조건 순서가 무작위라 라우트가 적은 슬라이스는
+        # 사실상 항상 이 경로를 타는데, 출력만 보면 시간 분할이 적용된 줄 알게 된다 —
+        # 미래 누수 방지가 실제로는 없는데 있다고 믿는 것이 문제다.
+        import warnings
+
+        warnings.warn(
+            f"시간 분할이 퇴화했다(경계에 걸친 라우트가 전체) — 그룹({group_col})-단독 "
+            "분할로 폴백한다. 이 분할에는 시간 기준 미래 누수 방지가 없다.",
+            stacklevel=2,
+        )
         rng = np.random.default_rng(seed)
         groups = df[group_col].unique()
         rng.shuffle(groups)

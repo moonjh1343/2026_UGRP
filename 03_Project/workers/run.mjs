@@ -437,7 +437,14 @@ for (const [level, group] of byLoad) {
 
       if (rows.length === 0) {
         skipped++
-        await ckpt.complete(id, { reps: 0, failed: cellFailed, status: 'skipped' })
+        /*
+         * **완료로 표시하지 않는다.** stale-skipped(검증용 --skip-stale)든 전 반복
+         * 실패든, 이 셀에는 데이터가 한 행도 없다. complete()에 넣으면 재개 시
+         * has()가 건너뛰어 — --skip-stale 없이 다시 돌려도 — 영구히 빈 셀이 된다.
+         * 실제로 --skip-stale 한 번이 그 실행 이름의 stale 축 전체를 비울 수 있었다.
+         * 버퍼만 비우고 다음 셀로 간다. 재개하면 이 셀은 다시 측정된다.
+         */
+        ckpt.discardPending()
         continue
       }
 

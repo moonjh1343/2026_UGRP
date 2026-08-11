@@ -29,7 +29,15 @@ export class Checkpoint {
     try {
       const raw = await readFile(this.donePath, 'utf8')
       for (const line of raw.split('\n')) {
-        if (line.trim()) this.done.add(JSON.parse(line).cellId)
+        if (!line.trim()) continue
+        const entry = JSON.parse(line)
+        /*
+         * status:'skipped'는 데이터가 0행인 셀이다(과거 버전이 남긴 항목).
+         * 완료로 취급하면 --skip-stale 한 번이 그 실행 이름의 stale 셀을 영구히
+         * 비운다 — 재개 시 다시 측정되도록 건너뛴다.
+         */
+        if (entry.status === 'skipped') continue
+        this.done.add(entry.cellId)
       }
     } catch {
       /* 첫 실행 */

@@ -72,7 +72,8 @@ export class CloudCheckpoint {
           TableName: this.table,
           KeyConditionExpression: 'experiment = :e',
           ExpressionAttributeValues: { ':e': { S: this.experiment } },
-          ProjectionExpression: 'cellId',
+          ProjectionExpression: 'cellId, #s',
+          ExpressionAttributeNames: { '#s': 'summary' },
           ExclusiveStartKey,
         }),
       )
@@ -80,7 +81,17 @@ export class CloudCheckpoint {
         const id = item.cellId?.S
         // `#`로 시작하는 정렬 키는 메타데이터·캘리브레이션이지 셀이 아니다.
         // 걸러내지 않으면 완료 셀 수가 부풀고, 재개 로그가 실제와 어긋난다.
-        if (id && !id.startsWith('#')) this.done.add(id)
+        if (!id || id.startsWith('#')) continue
+        /*
+         * status:'skipped'는 데이터가 0행인 셀이다(과거 버전이 남긴 항목).
+         * 로컬 Checkpoint와 같은 이유로 완료로 취급하지 않는다 — 재개 시 다시 잰다.
+         */
+        try {
+          if (JSON.parse(item.summary?.S ?? '{}').status === 'skipped') continue
+        } catch {
+          /* summary가 없거나 깨진 항목은 완료로 취급 — 결과 유무는 S3가 판단 기준이다 */
+        }
+        this.done.add(id)
       }
       ExclusiveStartKey = res.LastEvaluatedKey
     } while (ExclusiveStartKey)

@@ -205,7 +205,10 @@ def load_runs(names: list[str] | None = None) -> pd.DataFrame:
     out = pd.concat(frames, ignore_index=True)
 
     envs = out[["experiment", "_env_browser", "_env_next", "_env_seed"]].drop_duplicates()
-    mixed = envs.groupby(["_env_browser", "_env_next"]).ngroups > 1
+    # dropna=False — experiment.json이 없는 런(_env_* 전부 NaN)이 섞이면 기본
+    # dropna=True가 그 그룹을 통째로 떨어뜨려, 환경이 갈렸는데도 경고가 조용히
+    # 건너뛰어진다.
+    mixed = envs.groupby(["_env_browser", "_env_next"], dropna=False).ngroups > 1
     if mixed:
         warnings.warn(
             "합친 실험들의 환경(브라우저·Next 버전)이 갈린다. 같은 데이터셋으로 볼 수 있는지 "

@@ -60,11 +60,29 @@ function deviceTierFrom(memory: number, cores: number, ua: string): number {
 
 type Profile = { lcp?: number; tbt?: number; dm?: number; hc?: number }
 
-/** 세션 프로파일 쿠키(base64 JSON). 깨져 있으면 조용히 무시한다 — 결정을 막을 이유가 없다. */
+/** 유한한 수만 통과시킨다 — 쿠키는 클라이언트가 쓰므로 문자열·NaN이 올 수 있다. */
+function finiteOrUndefined(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+}
+
+/**
+ * 세션 프로파일 쿠키(base64 JSON). 깨져 있으면 조용히 무시한다 — 결정을 막을 이유가 없다.
+ *
+ * 필드 단위로도 타입을 거른다. `{"lcp":"3000"}` 같은 값이 통과하면 toVector()의
+ * prevLcpMs가 NaN이 되고, evalTree의 `NaN <= threshold`는 항상 false라 그 분기가
+ * 항상 오른쪽으로 흐른다 — 오류 없이 그럴듯한 점수가 나오는 경로다. v0 트리는
+ * prevLcpMs를 안 쓰므로 잠복해 있다가 학습 트리로 교체하는 순간 발현한다.
+ */
 function readProfile(raw: string | undefined): Profile {
   if (!raw) return {}
   try {
-    return JSON.parse(atob(decodeURIComponent(raw))) as Profile
+    const p = JSON.parse(atob(decodeURIComponent(raw))) as Record<string, unknown>
+    return {
+      lcp: finiteOrUndefined(p.lcp),
+      tbt: finiteOrUndefined(p.tbt),
+      dm: finiteOrUndefined(p.dm),
+      hc: finiteOrUndefined(p.hc),
+    }
   } catch {
     return {}
   }

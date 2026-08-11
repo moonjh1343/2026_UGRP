@@ -71,7 +71,16 @@ const rows = []
 let n = 0
 process.stdout.write('  ')
 for (const { cell, rep } of plan) {
-  const r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: false })
+  /*
+   * run.mjs·verify-variance와 같은 이유로 잡는다 — Playwright의 일시적 타임아웃
+   * 한 번으로 30~60분짜리 진단이 통째로 죽으면 안 된다.
+   */
+  let r
+  try {
+    r = await measureOnce({ base: BASE, browser, cell, rep, allowStale: false })
+  } catch (err) {
+    r = { ok: false, reason: `예외: ${err.message}` }
+  }
   if (!r.ok || rep < 0) continue
   const a = r.attribution?.LCP ?? {}
   rows.push({

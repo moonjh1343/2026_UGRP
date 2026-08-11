@@ -22,7 +22,7 @@
  * --requeue는 수집이 멈춘 뒤에 돌린다. done.jsonl은 러너가 **메모리에 올린 뒤**
  * append로만 쓰므로, 도는 중에 지워도 이번 실행에는 반영되지 않고 파일만 어긋난다.
  */
-import { readFile, writeFile, stat } from 'node:fs/promises'
+import { readFile, rename, writeFile, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -47,7 +47,14 @@ const donePath = join(dir, 'done.jsonl')
 const quarantinePath = join(dir, 'quarantine.json')
 
 const readJsonl = async (p) => {
-  const raw = await readFile(p, 'utf8')
+  let raw
+  try {
+    raw = await readFile(p, 'utf8')
+  } catch (err) {
+    // 셀이 0개 완료된 실행에는 results/done이 아직 없다 — 빈 목록이 맞지, 크래시가 아니다.
+    if (err.code === 'ENOENT') return []
+    throw err
+  }
   const lines = raw.split('\n').filter((l) => l.trim())
   const out = []
   for (let i = 0; i < lines.length; i++) {
@@ -179,7 +186,14 @@ if (arg('requeue')) {
   }
   const requeueSet = new Set(requeueable)
   const kept = (await readJsonl(donePath)).filter((d) => !requeueSet.has(d.cellId))
-  await writeFile(donePath, kept.map((d) => JSON.stringify(d)).join('\n') + '\n')
+  /*
+   * done.jsonl 재작성은 원자적이어야 한다. writeFile 도중 죽으면 파일이 잘려
+   * 다음 실행이 완료 셀을 대량 재측정한다. 임시 파일에 쓰고 rename — 같은
+   * 파일시스템 안의 rename은 원자적이다.
+   */
+  const tmpPath = `${donePath}.tmp`
+  await writeFile(tmpPath, kept.map((d) => JSON.stringify(d)).join('\n') + '\n')
+  await rename(tmpPath, donePath)
   console.log(`\ndone.jsonl에서 ${requeueable.length}개 셀 제거 — ${kept.length}개 남음`)
   for (const c of requeueable) console.log(`    ${c}`)
   console.log(`\n다음 실행이 이 셀들을 다시 잰다:  node run.mjs --name ${name} ...`)

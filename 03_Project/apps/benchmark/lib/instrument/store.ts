@@ -86,9 +86,14 @@ function push<T>(arr: T[], v: T) {
   if (arr.length > LIMIT) arr.splice(0, arr.length - LIMIT)
 }
 
-export function putRender(r: RenderRecord) {
+/**
+ * countRouteHit=false는 "같은 페이지뷰의 부속 레코드"용이다. CSR는 셸 렌더와
+ * /api/data가 각각 레코드를 남기는데 둘 다 히트로 세면 CSR 조건에서만 routeRps가
+ * 2배가 된다 — 서버 상태 피처에 모드가 새어 들어가는 경로다(부하는 외생이어야 한다).
+ */
+export function putRender(r: RenderRecord, opts: { countRouteHit?: boolean } = {}) {
   push(store().renders, r)
-  noteRouteHit(r.routeKey, r.ts)
+  if (opts.countRouteHit !== false) noteRouteHit(r.routeKey, r.ts)
 }
 
 export function putBeacon(b: BeaconRecord) {
@@ -108,7 +113,16 @@ export function noteRouteHit(routeKey: string, ts: number) {
 /** 라우트별 최근 60초 요청률. 제안서 §3.1.2의 missRate 계산에 들어간다. */
 export function routeRps(): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const [key, hits] of store().routeHits) out[key] = hits.length / 60
+  /*
+   * 읽을 때도 60초 컷오프를 다시 적용한다. 삽입 시에만 정리하면 히트가 끊긴
+   * 라우트의 오래된 타임스탬프가 영영 남아, 부하 셀 종료 직후의 idle 셀에서
+   * 배경 부하 라우트들의 rps가 60초 전 값 그대로 보고된다.
+   */
+  const cutoff = Date.now() - 60_000
+  for (const [key, hits] of store().routeHits) {
+    const live = hits.filter((t) => t >= cutoff).length
+    if (live > 0) out[key] = live / 60
+  }
   return out
 }
 

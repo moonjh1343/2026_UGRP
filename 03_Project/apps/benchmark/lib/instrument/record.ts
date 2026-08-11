@@ -3,7 +3,7 @@ import type { Mode } from '@/lib/modes'
 import type { Route } from '@/lib/routes'
 import { HEADER } from './correlation'
 import { enterRequest, exitRequest } from './serverState'
-import { putRender } from './store'
+import { noteResponse, putRender } from './store'
 
 /**
  * 렌더 구간의 CPU 시간을 측정하고 레코드를 남긴다.
@@ -49,10 +49,20 @@ export async function recordRender<T>(
   const t0 = performance.now()
   enterRequest()
 
+  /*
+   * 서킷 브레이커의 5xx 입력. noteResponse는 정의만 있고 호출부가 없어서
+   * errorRate5xx가 영원히 0이었다 — 가드레일 한 축이 무음으로 죽어 있던 것.
+   * 렌더 성공 = 200, 렌더 예외 = 500으로 근사한다(예외는 Next가 5xx로 바꾼다).
+   */
+  let renderFailed = false
   try {
     return await render()
+  } catch (err) {
+    renderFailed = true
+    throw err
   } finally {
     exitRequest()
+    noteResponse(renderFailed ? 500 : 200)
     const cpu = process.cpuUsage(cpu0)
     putRender({
       kind: 'render',

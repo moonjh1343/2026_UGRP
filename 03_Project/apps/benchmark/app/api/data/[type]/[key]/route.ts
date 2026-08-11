@@ -1,7 +1,7 @@
 import { getData } from '@/lib/data'
 import { HEADER } from '@/lib/instrument/correlation'
 import { enterRequest, exitRequest } from '@/lib/instrument/serverState'
-import { putRender } from '@/lib/instrument/store'
+import { noteResponse, putRender } from '@/lib/instrument/store'
 import { resolveRoute } from '@/lib/routes'
 
 export const dynamic = 'force-dynamic'
@@ -33,11 +33,16 @@ export async function GET(
   const t0 = performance.now()
   enterRequest()
 
+  let failed = false
   try {
     const payload = await getData(route)
     return Response.json(payload)
+  } catch (err) {
+    failed = true
+    throw err
   } finally {
     exitRequest()
+    noteResponse(failed ? 500 : 200)
     const cpu = process.cpuUsage(cpu0)
     putRender({
       kind: 'render',
@@ -58,6 +63,11 @@ export async function GET(
       decisionMargin: null,
       propensity: null,
       ts: Date.now(),
-    })
+      /*
+       * 라우트 히트로 세지 않는다 — CSR 페이지뷰는 셸 렌더가 이미 셌다.
+       * 둘 다 세면 CSR 조건에서만 routeRps가 2배가 되어 서버 상태 피처에
+       * 모드가 새어 들어간다.
+       */
+    }, { countRouteHit: false })
   }
 }

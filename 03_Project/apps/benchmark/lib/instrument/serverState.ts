@@ -92,6 +92,16 @@ export function snapshot(): ServerSnapshot {
   s.lastCpu = cpu
   s.lastAt = now
 
+  /*
+   * 히스토그램도 CPU와 같은 "조회 사이의 델타" 의미론이다. 리셋 없이 두면
+   * 프로세스 일생 누적 분포가 되어, high 부하 셀을 지난 뒤의 idle 셀에서도
+   * p95가 높게 남는다 — 서버 상태 피처가 측정 이력에 의존하는 계통 오염이고,
+   * 조건 순서 무작위화로도 상쇄되지 않는다.
+   */
+  const histP95 = s.histogram.percentile(95) / 1e6
+  const histMax = s.histogram.max / 1e6
+  s.histogram.reset()
+
   const mem = process.memoryUsage()
 
   return {
@@ -100,8 +110,8 @@ export function snapshot(): ServerSnapshot {
     memPct: (mem.rss / os.totalmem()) * 100,
     rssMB: mem.rss / 1024 / 1024,
     inflight: s.inflight,
-    eventLoopP95Ms: s.histogram.percentile(95) / 1e6,
-    eventLoopMaxMs: s.histogram.max / 1e6,
+    eventLoopP95Ms: histP95,
+    eventLoopMaxMs: histMax,
     cacheHitRate: cacheHitRate(),
     routeRps: routeRps(),
     guardrails: guardrails(),

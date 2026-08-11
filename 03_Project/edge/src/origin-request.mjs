@@ -113,7 +113,12 @@ export async function handler(event) {
    */
   const eligible = decision.reason !== 'single' && decision.reason !== 'bot' && decision.reason !== 'circuit'
   let mode = decision.mode
-  let propensity = 1 - EXPLORE_RATE
+  /*
+   * 하드 고정(단일 후보·봇·서킷)은 무작위화 대상이 아니므로 이 모드가 서빙될 확률은
+   * 정확히 1이다. 1-EXPLORE_RATE로 두면 IPS 가중치에 1/0.95 ≈ 1.05배가 조용히
+   * 곱해진다 — eligible 분기에서만 실제 확률로 바꾼다.
+   */
+  let propensity = 1
   let reason = decision.reason
 
   if (eligible && EXPLORE_RATE > 0 && Math.random() < EXPLORE_RATE) {

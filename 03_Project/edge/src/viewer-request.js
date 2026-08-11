@@ -19,18 +19,20 @@ var EFFECTIVE_TYPES = ['slow-2g', '2g', '3g', '4g']
 /**
  * 크롤러 판정.
  *
+ * **features.ts의 BOT_UA와 문자 그대로 같아야 한다.** 이 판정은 버킷(캐시 키)을
+ * 가르고, origin-request의 collect()가 같은 UA로 다시 판정해 SSR을 고정한다.
+ * 두 판정이 어긋나면 — 예전에 여기만 9개 고정 문자열이었다 — features 쪽만 봇으로
+ * 보는 UA(Discordbot, PetalBot, crawl* 류)의 SSR 응답이 **비봇 버킷에 캐시**되어,
+ * 같은 버킷의 일반 사용자 전원이 TTL 동안 SSR을 받는다.
+ *
  * **헤드리스 브라우저를 봇으로 잡으면 안 된다.** 측정 워커가 곧 헤드리스 Chrome이라,
  * `headlesschrome`을 여기 넣으면 모든 워커 요청이 봇 버킷으로 가서 정책이 실제로
- * 무엇을 고르는지 영영 관측되지 않는다. features.ts가 같은 이유로 같은 목록을 쓴다.
+ * 무엇을 고르는지 영영 관측되지 않는다. (이 정규식은 HeadlessChrome에 매치되지 않는다.)
  */
-var BOTS = ['googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot', 'facebookexternalhit', 'twitterbot', 'applebot']
+var BOT_UA = /bot\b|bot\/|crawl|spider|slurp|bingpreview|facebookexternalhit|duckduckgo/i
 
 function isBot(ua) {
-  var u = ua.toLowerCase()
-  for (var i = 0; i < BOTS.length; i++) {
-    if (u.indexOf(BOTS[i]) !== -1) return true
-  }
-  return false
+  return BOT_UA.test(ua)
 }
 
 /**

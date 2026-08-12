@@ -108,7 +108,6 @@ export async function calibrateRemote({
   holdSettleMs = 30_000,
   holdMs = 180_000,
   holdRounds = 4,
-  log = console.log,
 }) {
   const result = await searchVus({
     target,
@@ -117,7 +116,7 @@ export async function calibrateRemote({
     measureAt: (vus) => measureAt({ base, controlUrl, vus, settleMs, observeMs }),
     holdAt: (vus) => measureAt({ base, controlUrl, vus, settleMs: holdSettleMs, observeMs: holdMs }),
     holdRounds,
-    log: (m) => log(`  캘리브레이션 ${m}`),
+    log: (m) => console.log(`  캘리브레이션 ${m}`),
   })
   return { ...result, holdMs }
 }
@@ -132,17 +131,17 @@ export async function calibrateRemote({
  * 실패해도 던지지 않는다. 여기서 막히면 뒤따르는 캘리브레이션도 막히고, 재시도는
  * 그쪽에서 세는 것이 맞다 — 위생 절차가 시도 횟수를 먹으면 진단이 흐려진다.
  */
-export async function resetRemoteLoad(controlUrl, { log = console.log } = {}) {
+export async function resetRemoteLoad(controlUrl) {
   try {
     const before = await get(controlUrl, '/state').catch(() => null)
     if (before && before.vus === 0) return { vus: 0, wasRunning: false }
-    if (before) log(`  부하 초기화 — 이전 워커가 남긴 VU ${before.vus}를 0으로 되돌린다`)
+    if (before) console.log(`  부하 초기화 — 이전 워커가 남긴 VU ${before.vus}를 0으로 되돌린다`)
     await post(controlUrl, '/vus', { vus: 0 })
     // 정리된 요청이 SUT에서 빠져나갈 시간. 이걸 안 주면 첫 탐침이 잔열을 함께 잰다.
     await sleep(5000)
     return { vus: 0, wasRunning: Boolean(before && before.vus > 0) }
   } catch (err) {
-    log(`  부하 초기화 실패(${err.message}) — 캘리브레이션에서 다시 시도한다`)
+    console.log(`  부하 초기화 실패(${err.message}) — 캘리브레이션에서 다시 시도한다`)
     return { vus: null, wasRunning: null }
   }
 }
@@ -160,7 +159,6 @@ export async function startRemoteLoad({ controlUrl, vus }) {
   return {
     vus: state.vus,
     stats,
-    controlUrl,
     async stop() {
       const final = await get(controlUrl, '/state').catch(() => ({ requests: 0, errors: 0 }))
       await post(controlUrl, '/vus', { vus: 0 }).catch(() => {})
@@ -204,10 +202,8 @@ export function makeLoadVerifier({
    * 양을 너무 짧은 창으로 재고 그 값을 셀 정의로 삼는 것.
    */
   observeMs = 15_000,
-  log = console.log,
 }) {
   let streak = 0
-  let checks = 0
   return {
     /** 각 행에 함께 기록해 어느 창으로 잰 값인지 남긴다. 창을 바꾸면 값의 성격이 바뀐다. */
     observeMs,
@@ -222,14 +218,13 @@ export function makeLoadVerifier({
       } catch (err) {
         return { ok: true, cpuPct: null, note: `메트릭 조회 실패(${err.message}) — 판단 보류` }
       }
-      checks++
       const off = Math.abs(m.cpuPct - expectedCpuPct)
       if (off <= tolerance) {
         streak = 0
         return { ok: true, cpuPct: m.cpuPct }
       }
       streak++
-      log(
+      console.log(
         `  부하 이탈 ${streak}/${streakLimit} — 실측 ${m.cpuPct.toFixed(1)}% vs 기대 ` +
           `${expectedCpuPct.toFixed(1)}% (허용 ±${tolerance}%p)`,
       )
@@ -244,6 +239,5 @@ export function makeLoadVerifier({
       }
       return { ok: true, cpuPct: m.cpuPct, deviating: true }
     },
-    stats: () => ({ checks, streak }),
   }
 }

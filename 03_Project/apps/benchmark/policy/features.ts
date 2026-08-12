@@ -106,7 +106,6 @@ export function collect(req: RequestLike, entry: RouteEntry): Features {
    */
   const injectedTier = h.get(HEADER.cellDeviceTier)
   const injectedNet = h.get(HEADER.cellEffectiveType)
-  const conditionInjected = injectedTier !== null || injectedNet !== null
 
   const deviceMemory = n(h.get('sec-ch-device-memory') ?? h.get('device-memory'), profile.dm ?? 0)
   /*
@@ -156,7 +155,6 @@ export function collect(req: RequestLike, entry: RouteEntry): Features {
 
     isBot: BOT_UA.test(ua),
     isRepeatVisit: req.cookies.get(COOKIE.sessionId) !== undefined,
-    conditionInjected,
   }
 }
 

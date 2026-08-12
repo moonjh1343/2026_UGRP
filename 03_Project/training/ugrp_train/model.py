@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 
-from .config import DEVICES, MODE_INDEX, NETWORKS
+from .config import DEVICES, NETWORKS
 
 DEFAULT_PARAMS = {
     "objective": "regression",  # 커스텀 목적함수를 쓸 때도 lgb가 초기값 계산에 참고한다
@@ -85,7 +85,7 @@ def make_pairwise_mse_objective(
     """
 
     def objective(preds: np.ndarray, dataset: lgb.Dataset):
-        y = dataset.get_label() if y_true is None else y_true
+        y = y_true
         grad = preds - y  # MSE
         hess = np.ones_like(preds)
 
@@ -125,10 +125,9 @@ def train_lightgbm(
     alpha: float = 0.3,
     epsilon: float = 0.1,
     num_boost_round: int = 200,
-    params: dict | None = None,
 ) -> lgb.Booster:
     """단일 부스터. alpha=0이면 순수 MSE(비교용)."""
-    p = {**DEFAULT_PARAMS, **(params or {}), "seed": seed}
+    p = {**DEFAULT_PARAMS, "seed": seed}
     dtrain = lgb.Dataset(X, label=y, free_raw_data=False)
 
     if alpha > 0:

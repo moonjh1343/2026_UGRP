@@ -63,15 +63,12 @@ export type ServerSnapshot = {
   cpuPct: number
   /** cpuPct의 분모. 다른 환경의 값과 비교하려면 이 값이 같아야 한다 */
   allocatedCores: number
-  memPct: number
-  rssMB: number
   inflight: number
   /**
    * 이벤트 루프 지연 p95(ms). 프로세스 단위 지표라 동시 요청 오염 문제가 없고,
    * "렌더 큐 지연" 피처의 실체가 된다.
    */
   eventLoopP95Ms: number
-  eventLoopMaxMs: number
   cacheHitRate: number
   /** 라우트별 최근 60초 요청률 — 전역 rps로는 라우트별 캐시 효율을 반영 못 한다 */
   routeRps: Record<string, number>
@@ -99,19 +96,13 @@ export function snapshot(): ServerSnapshot {
    * 조건 순서 무작위화로도 상쇄되지 않는다.
    */
   const histP95 = s.histogram.percentile(95) / 1e6
-  const histMax = s.histogram.max / 1e6
   s.histogram.reset()
-
-  const mem = process.memoryUsage()
 
   return {
     cpuPct: Math.min(100, (usedUs / elapsedUs / ALLOCATED_CORES) * 100),
     allocatedCores: ALLOCATED_CORES,
-    memPct: (mem.rss / os.totalmem()) * 100,
-    rssMB: mem.rss / 1024 / 1024,
     inflight: s.inflight,
     eventLoopP95Ms: histP95,
-    eventLoopMaxMs: histMax,
     cacheHitRate: cacheHitRate(),
     routeRps: routeRps(),
     guardrails: guardrails(),

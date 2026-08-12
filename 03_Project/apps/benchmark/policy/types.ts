@@ -63,8 +63,6 @@ export type Features = {
   // --- 컨텍스트 ---
   isBot: boolean
   isRepeatVisit: boolean
-  /** 측정 워커가 조건을 헤더로 주입했는가 — 실험 셀에서는 true */
-  conditionInjected: boolean
 }
 
 /**

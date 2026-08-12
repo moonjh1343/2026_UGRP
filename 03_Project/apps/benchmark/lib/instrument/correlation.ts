@@ -14,10 +14,6 @@ export const HEADER = {
   expCell: 'x-exp-cell',
   /** 실제 적용된 모드 — 하드 규칙 오버라이드 확인용 */
   modeApplied: 'x-render-mode-applied',
-  /** 렌더 CPU 시간(µs) */
-  serverCpuUs: 'x-server-cpu-us',
-  /** ISR 캐시 판정 — §3.1.2의 missRate 계산에 필수 */
-  cacheStatus: 'x-cache-status',
   /** Next.js가 ISR 라우트에 붙이는 캐시 판정 (HIT/MISS/STALE) */
   nextCache: 'x-nextjs-cache',
 

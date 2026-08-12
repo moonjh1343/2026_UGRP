@@ -37,7 +37,7 @@ export interface ServingOriginStackProps extends StackProps {
    */
   cloudfrontPrefixListId: string
   /** 서비스 태스크 수. 오토스케일은 켜지 않는다 — 아래 참조. */
-  desiredCount?: number
+  desiredCount: number
 }
 
 export class ServingOriginStack extends Stack {
@@ -138,7 +138,7 @@ export class ServingOriginStack extends Stack {
     const service = new ecs.FargateService(this, 'Sut', {
       cluster,
       taskDefinition: taskDef,
-      desiredCount: props.desiredCount ?? 2,
+      desiredCount: props.desiredCount,
       // 공개 서브넷 + 공개 IP. ECR·로그에 NAT 없이 닿기 위한 것이고, 인그레스는 SG가 막는다.
       assignPublicIp: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },

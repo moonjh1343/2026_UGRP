@@ -11,14 +11,14 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .config import DEFAULT_LAMBDA, DEFAULT_MU, QOE_WEIGHTS, SERVER_COST_UNIT_DIVISOR
+from .config import DEFAULT_LAMBDA, QOE_WEIGHTS, SERVER_COST_UNIT_DIVISOR
 
 QOE_METRICS = list(QOE_WEIGHTS.keys())
 
 
-def estimate_render_cost(df: pd.DataFrame, group_cols: list[str] | None = None) -> pd.DataFrame:
+def estimate_render_cost(df: pd.DataFrame) -> pd.DataFrame:
     """
-    C_render(m[, routeType]) — Idle 셀·실제 렌더 발생 행만 골라 평균한다.
+    C_render(m, routeType) — Idle 셀·실제 렌더 발생 행만 골라 평균한다.
 
     **개별 행의 `serverRenderCpuUs`를 라벨에 직접 쓰면 안 된다.** `process.cpuUsage()`가
     Windows에서 15.625ms 단위로 양자화되어 수 ms짜리 렌더가 대부분 0으로 잡힌다
@@ -26,12 +26,11 @@ def estimate_render_cost(df: pd.DataFrame, group_cols: list[str] | None = None) 
     인데 `serverRenderCpuUs`가 0인 경우가 흔하다. 이 함수는 **여러 반복의 평균**을 취해
     양자화 잡음을 상쇄한다 — `measure:render` 스크립트가 하는 것과 같은 처리다.
 
-    group_cols 기본값은 (mode, routeType) — 렌더 비용은 모드뿐 아니라 라우트 무게에도
+    (mode, routeType) 단위로 묶는다 — 렌더 비용은 모드뿐 아니라 라우트 무게에도
     좌우된다(대시보드형의 하이드레이션 CPU 대 콘텐츠형의 직렬화 비용). 표본이 부족한
     조합은 모드 단위로 폴백한다.
     """
-    if group_cols is None:
-        group_cols = ["mode", "routeType"]
+    group_cols = ["mode", "routeType"]
 
     idle = df[(df["load"] == "idle") & (df["serverRenderCount"] > 0)]
     if idle.empty:
@@ -82,7 +81,6 @@ def compute_server_cost(df: pd.DataFrame) -> pd.Series:
 
     rendered = merged["serverRenderCount"] > 0
     server_cost_us = np.where(rendered, merged["cRenderUs"].fillna(0.0), 0.0)
-    server_cost_us = server_cost_us + DEFAULT_MU * 0.0  # C_store 미계측 — 자리만 남긴다
 
     return pd.Series(server_cost_us / SERVER_COST_UNIT_DIVISOR, index=df.index, name="serverCostMs")
 

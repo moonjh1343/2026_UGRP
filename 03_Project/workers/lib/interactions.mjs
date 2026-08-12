@@ -125,5 +125,5 @@ export async function runSequence(page, routeType) {
     }
   }
 
-  return { performed, attempted: seq.length, failures }
+  return { performed, failures }
 }

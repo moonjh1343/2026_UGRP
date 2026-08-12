@@ -182,7 +182,6 @@ export function parseFilters(rawInput: unknown, stage: string): string[] {
 
 /** 부하 수준 — grid.mjs의 LOADS와 같은 순서여야 한다. */
 export const LOADS = ['idle', 'low', 'mid', 'high'] as const
-export type Load = (typeof LOADS)[number]
 
 /**
  * 샤드 수 검증.

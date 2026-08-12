@@ -96,11 +96,3 @@ export function median(xs) {
   const m = Math.floor(s.length / 2)
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
-
-export function pad(s, n) {
-  return String(s).padEnd(n)
-}
-
-export function num(v, w, d = 1) {
-  return (Number.isFinite(v) ? v.toFixed(d) : '-').padStart(w)
-}

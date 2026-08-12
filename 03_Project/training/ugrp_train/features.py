@@ -103,34 +103,8 @@ def build_feature_frame(df: pd.DataFrame, routes: pd.DataFrame, calibration: dic
     for key, val in LAB_FEATURE_DEFAULTS.items():
         merged[key] = val
 
-    rename = {"modeIdx": "mode_vec"}
-    out = pd.DataFrame(index=merged.index)
-    out["mode"] = merged["modeIdx"].astype(int)
-    out["deviceTier"] = merged["deviceTier"]
-    out["deviceMemory"] = merged["deviceMemory"]
-    out["hardwareConcurrency"] = merged["hardwareConcurrency"]
-    out["effectiveTypeIdx"] = merged["effectiveTypeIdx"]
-    out["rttMs"] = merged["rttMs"]
-    out["downlinkMbps"] = merged["downlinkMbps"]
-    out["saveData"] = merged["saveData"]
-    out["prevLcpMs"] = merged["prevLcpMs"]
-    out["prevTbtMs"] = merged["prevTbtMs"]
-    out["cpuPct"] = merged["cpuPct"]
-    out["eventLoopP95Ms"] = merged["eventLoopP95Ms"]
-    out["inflight"] = merged["inflight"]
-    out["cacheHitRate"] = merged["cacheHitRate"]
-    out["routeRps"] = merged["routeRps"]
-    out["nodeCount"] = merged["nodeCount"]
-    out["interactiveCount"] = merged["interactiveCount"]
-    out["payloadKB"] = merged["payloadKB"]
-    out["fetchDepth"] = merged["fetchDepth"]
-    out["fetchDelayMs"] = merged["fetchDelayMs"]
-    out["personalizedRatio"] = merged["personalizedRatio"]
-    out["seoWeight"] = merged["seoWeight"]
-    out["bundleKB"] = merged["bundleKB"]
-    out["isRepeatVisit"] = merged["isRepeatVisit"]
-
-    assert list(out.columns) == FEATURE_ORDER, "FEATURE_ORDER와 실제로 만든 열이 어긋난다"
+    # FEATURE_ORDER로 사영 — 열이 빠지면 여기서 KeyError로 죽는다(조용한 누락 방지).
+    out = merged.assign(mode=merged["modeIdx"].astype(int))[FEATURE_ORDER]
 
     missing_route = merged["nodeCount"].isna()
     if missing_route.any():

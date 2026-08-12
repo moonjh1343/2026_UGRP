@@ -101,7 +101,7 @@ export async function calibrateRemote({
   controlUrl,
   target,
   tolerance = 4,
-  maxVus = 256,
+  maxVus = 2048, // 상향 근거는 load/search.mjs의 maxVus 주석
   settleMs = 8000,
   observeMs = 20000,
   /** 지속 확인 — 안정화 30초 + 관측 3분. 평형에 닿기에 충분하고 셀 하나 값보다 짧다. */

@@ -59,8 +59,6 @@ export class ShardStack extends Stack {
       // 컨테이너 인사이트는 태스크당 과금된다. 60태스크 × 41시간이면 무시할 수 없고,
       // 우리가 보는 지표는 SUT가 스스로 내보내는 /api/internal/metrics다.
       containerInsightsV2: ecs.ContainerInsights.DISABLED,
-      // Spot 모드의 capacityProviderStrategies가 요구한다. 켜 두는 것 자체는 무해하다.
-      enableFargateCapacityProviders: true,
     })
 
     const namespace = new servicediscovery.PrivateDnsNamespace(this, 'Namespace', {
@@ -147,20 +145,6 @@ export class ShardStack extends Stack {
     const logging = (prefix: string) =>
       ecs.LogDrivers.awsLogs({ logGroup, streamPrefix: `${prefix}-${pad}` })
 
-    /*
-     * Spot 모드면 세 태스크 전부 FARGATE_SPOT으로. 온디맨드 대비 ~65-70% 절감.
-     *
-     * 중단 내성은 이미 시스템에 있다: SUT·부하 중단 → 워커의 이탈 감시·연속 실패
-     * 한도가 자진 정지 → (Spot 모드에선 워커도 서비스라) ECS가 다시 띄움 →
-     * 체크포인트 재개 + 미완료 그룹만 재캘리브레이션. 중단이 만드는 것은 데이터
-     * 오염이 아니라 벽시계 손실이다. 셀 정의의 실측 근거는 행마다 남는
-     * serverCpuPct다 — Spot 하드웨어 이동으로 VU→CPU 대응이 변해도 검증기가
-     * 잡고 재캘리브레이션으로 회복한다.
-     */
-    const capacity = collection.spot
-      ? [{ capacityProvider: 'FARGATE_SPOT', weight: 1 }]
-      : undefined
-
     // ── SUT ───────────────────────────────────────────────────────────────
     const sutTask = new ecs.FargateTaskDefinition(this, `SutTask${pad}`, {
       cpu: TASK_SIZE.sut.cpu,
@@ -193,7 +177,6 @@ export class ShardStack extends Stack {
       assignPublicIp: false,
       vpcSubnets: subnetsFor('sut'),
       securityGroups: [props.sutSg],
-      capacityProviderStrategies: capacity,
       cloudMapOptions: {
         cloudMapNamespace: namespace,
         name: `sut-${pad}`,
@@ -279,7 +262,6 @@ export class ShardStack extends Stack {
       assignPublicIp: false,
       vpcSubnets: subnetsFor('load'),
       securityGroups: [props.loadSg],
-      capacityProviderStrategies: capacity,
       cloudMapOptions: {
         cloudMapNamespace: namespace,
         name: `load-${pad}`,
@@ -293,33 +275,9 @@ export class ShardStack extends Stack {
 
     /*
      * SUT와 부하 생성기는 서비스라 계속 떠 있다. 실행할 때 뜨고 끝나면 끝나야 하는
-     * 것은 **워커뿐**이라, 온디맨드 모드에서는 오케스트레이션이 RunTask로 띄운다.
+     * 것은 **워커뿐**이라, 오케스트레이션이 RunTask로 띄우는 대상도 워커 하나다.
      * 캘리브레이션 → 부하 투입 → 측정 순서는 워커 안에 있다(run.mjs의 부하 그룹 루프).
-     *
-     * Spot 모드에서는 워커도 **서비스**다. RunTask로 뜬 Spot 태스크는 중단되면
-     * 그걸로 끝이라(SFN 재시도는 States.TaskFailed를 의도적으로 안 받는다 —
-     * orchestration-stack의 slice-b2 교훈) 중단 한 번이 수집 전체를 세운다.
-     * 서비스면 ECS가 다시 띄우고 run.mjs가 체크포인트에서 재개한다. 자진 정지
-     * (이탈·연속 실패)도 재기동 → 재캘리브레이션으로 회복된다 — Spot에서는 그
-     * 원인(부하 생성기 이동 등)이 대개 일시적이기 때문이다. 대가: 샤드가 다 끝난
-     * 뒤에도 태스크가 "확인 후 즉시 종료"를 반복한다(사이클당 ~1분, 비용 무시
-     * 가능). 감시 쪽이 완료를 보고 스택을 내리는 것으로 정리한다.
-     * 배포 서킷 브레이커는 끈다 — SUT가 아직 안 뜬 첫 배포에서 워커가 짧게
-     * 죽었다 뜨는 것이 정상 경로라, 브레이커가 그걸 실패한 배포로 오판한다.
      */
-    if (collection.spot) {
-      new ecs.FargateService(this, `Worker${pad}`, {
-        cluster: this.cluster,
-        taskDefinition: workerTask,
-        desiredCount: 1,
-        assignPublicIp: false,
-        vpcSubnets: subnetsFor('measure'),
-        securityGroups: [props.workerSg],
-        capacityProviderStrategies: capacity,
-        minHealthyPercent: 0,
-        maxHealthyPercent: 100,
-      })
-    }
     void sutService
     void loadService
     this.workerTaskDefinitions.push(workerTask)

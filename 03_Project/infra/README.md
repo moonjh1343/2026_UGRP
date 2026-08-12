@@ -12,7 +12,7 @@
 
 ```
 샤드 i ─┬─ SUT 태스크        (Fargate, desiredCount 고정, 오토스케일 없음)
-        ├─ k6 태스크         (Fargate Spot, 캘리브레이션된 VU로 고정)
+        ├─ k6 태스크         (Fargate, 캘리브레이션된 VU로 고정)
         └─ Playwright 워커   (Fargate, 자기 몫의 셀만 측정)
 ```
 

@@ -103,7 +103,7 @@ LAB_FEATURE_DEFAULTS = {
 
 # QoE 가중치 — 제안서 §3.1의 J(x,m) = Σ w_i·z_r(QoE_i) + λ·ServerCost(x,m).
 # 제안서는 가중치 수치를 못박지 않는다. Core Web Vitals의 상대적 비중(LCP·INP가
-# 1차 지표, TTFB는 보조)을 참고한 기본값이며 **스윕 대상이다** — --qoe-weights로 덮는다.
+# 1차 지표, TTFB는 보조)을 참고한 기본값이며 **스윕 대상이다** — 스윕은 이 값을 직접 고쳐 돌린다.
 QOE_WEIGHTS = {"LCP": 0.4, "INP": 0.3, "TBT": 0.2, "TTFB": 0.1}
 
 # λ, μ — §3.3에 따르면 λ는 배포 후 이중 상승법으로 조정되는 그림자 가격이지,
@@ -117,9 +117,3 @@ DEFAULT_MU = 0.0  # C_store 항. 캐시 엔트리 크기를 아직 계측하지 
 # ms로 낮춰 λ가 다루기 쉬운 범위에 오게 한다. "정답 스케일"이 아니라 공학적
 # 편의이며, λ 스윕으로 실제 영향력을 조정한다.
 SERVER_COST_UNIT_DIVISOR = 1000.0  # µs → ms
-
-MODE_TABLE_PATH_HINT = (
-    "route_snapshot.json — scripts/fetch_routes.py로 생성. bundleKB는 "
-    "apps/benchmark/policy/bundles.generated.json에서 (모드, 유형) 단위로 온다 "
-    "— 인스턴스 단위가 아니다(policy/routeTable.ts의 bundleFor()와 동일)."
-)

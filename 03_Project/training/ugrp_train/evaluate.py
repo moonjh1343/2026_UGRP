@@ -25,12 +25,7 @@ def aggregate_by_condition(df: pd.DataFrame) -> pd.DataFrame:
     `J`와 예측값만 보므로 피처가 필요 없다 — 필요해지면 `X`의 `mode`를 다른 이름으로
     바꿔서 합쳐야 한다.
     """
-    agg = df.groupby([*GROUP_KEYS, "mode"]).agg(
-        J=("J", "mean"),
-        J_std=("J", "std"),
-        n=("J", "count"),
-    )
-    return agg.reset_index()
+    return df.groupby([*GROUP_KEYS, "mode"])["J"].mean().reset_index()
 
 
 def _per_condition_eval(group: pd.DataFrame, pred_col: str) -> dict:

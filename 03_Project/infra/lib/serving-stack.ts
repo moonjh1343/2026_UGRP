@@ -18,7 +18,6 @@ import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-l
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import * as logs from 'aws-cdk-lib/aws-logs'
 import { Construct } from 'constructs'
 
@@ -111,25 +110,18 @@ export class ServingStack extends Stack {
     })
 
     /*
-     * 오리진 요청 정책 — 엣지가 만든 헤더와 쿠키를 오리진에 넘긴다.
+     * 오리진 요청 정책 — **뷰어가 보낸** 헤더 중 오리진에 넘길 것만 고른다.
      *
      * 캐시 키(cachePolicy)와 별개다. 여기 있는 헤더는 오리진에 전달되지만 캐시를
-     * 가르지 않는다. 결정 결과(x-render-mode)와 상관 ID가 그 예다 — 오리진은
-     * 알아야 하지만, 그것으로 캐시를 또 갈면 버킷으로 접은 의미가 사라진다.
+     * 가르지 않는다. 결정 헤더(x-render-mode 등)는 여기 넣지 않는다 — 그것들은
+     * Lambda@Edge가 origin-request에서 요청에 직접 얹으므로 정책과 무관하게
+     * 오리진에 도달하고, 여기 넣으면 뷰어가 같은 이름을 보내 결정 계층을 우회한
+     * 관측(구분 불가능한 오염 행)을 만들 수 있다.
      */
     const originRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'ForwardDecision', {
-      comment: 'Forward the edge decision and correlation id to the origin',
+      comment: 'Forward the viewer hints the edge decision needs to the origin',
       headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
         'x-ugrp-bucket',
-        'x-render-mode',
-        'x-correlation-id',
-        'x-decision-reason',
-        'x-decision-margin',
-        'x-policy',
-        'x-policy-us',
-        'x-ugrp-propensity',
-        'x-cell-device-tier',
-        'x-cell-effective-type',
         'user-agent',
         'save-data',
       ),
@@ -147,9 +139,10 @@ export class ServingStack extends Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy,
         originRequestPolicy,
-        // 결정 헤더를 응답에도 남긴다 — 브라우저 비콘이 조인 키를 읽어야 한다.
+        // Accept-CH를 모든 응답에 싣는다 — 브라우저가 다음 요청부터 Client Hints를
+        // 보내야 뷰어 함수가 버킷을 접을 수 있다. (상관 ID는 middleware의 Server-Timing이 나른다.)
         responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'ExposeDecision', {
-          comment: 'Expose the correlation id to the page',
+          comment: 'Advertise the client hints the bucket needs',
           customHeadersBehavior: {
             customHeaders: [
               { header: 'Accept-CH', value: 'Sec-CH-Device-Memory, Sec-CH-ECT, Downlink, RTT, Save-Data', override: false },
@@ -190,9 +183,4 @@ export class ServingStack extends Stack {
     new CfnOutput(this, 'DistributionDomain', { value: this.distribution.distributionDomainName })
     new CfnOutput(this, 'EdgeFunctionVersion', { value: decide.currentVersion.version })
   }
-}
-
-/** 서빙용 SUT 앞의 ALB를 만든다. 랩 평면에는 없는 것이라 여기 둔다. */
-export function servingOriginDomain(alb: elbv2.ApplicationLoadBalancer): string {
-  return alb.loadBalancerDnsName
 }

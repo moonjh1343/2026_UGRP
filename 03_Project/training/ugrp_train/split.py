@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GroupKFold
 
 
 def time_and_group_split(
@@ -60,12 +59,3 @@ def time_and_group_split(
         train_idx = df.index[~df[group_col].isin(test_groups)]
 
     return train_idx, test_idx
-
-
-def group_kfold_indices(df: pd.DataFrame, n_splits: int, group_col: str = "routeKey"):
-    """GroupKFold — 튜닝(Optuna)에서 쓴다. n_splits는 고유 라우트 수를 넘을 수 없다."""
-    n_groups = df[group_col].nunique()
-    if n_splits > n_groups:
-        raise ValueError(f"n_splits({n_splits}) > 고유 라우트 수({n_groups}) — 폴드 수를 줄여라")
-    gkf = GroupKFold(n_splits=n_splits)
-    return list(gkf.split(df, groups=df[group_col]))

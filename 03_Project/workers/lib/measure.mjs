@@ -210,7 +210,6 @@ export async function measureOnce({ base, browser, cell, rep, allowStale = true 
       cid,
       wallMs: Date.now() - t0,
       cacheStatus,
-      cachePrepared: cachePrep.prepared,
       metrics: {
         LCP: m.LCP ?? null,
         INP: m.INP ?? null,

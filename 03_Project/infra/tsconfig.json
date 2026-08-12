@@ -10,13 +10,7 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "esModuleInterop": true,
-    "declaration": false,
-    "sourceMap": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "skipLibCheck": true,
-    "typeRoots": ["./node_modules/@types"]
+    "skipLibCheck": true
   },
   "include": ["bin/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules", "cdk.out"]

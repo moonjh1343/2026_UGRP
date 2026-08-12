@@ -30,6 +30,7 @@ if sys.platform == "win32":
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
+import pandas as pd
 
 from ugrp_train import evaluate, features, io, labels, model, split
 from ugrp_train.config import FEATURE_ORDER, QOE_WEIGHTS
@@ -94,7 +95,6 @@ def main() -> None:
         X_sub = features.build_feature_frame(sub, routes, calibration=exp_calibration.get(exp_name))
         X_sub.index = sub.index
         frames.append(X_sub)
-    import pandas as pd
 
     X = pd.concat(frames).sort_index()
     meta = labeled[["device", "network", "load", "routeType", "routeKey", "mode", "ts"]]
@@ -108,27 +108,21 @@ def main() -> None:
     train_idx, test_idx = split.time_and_group_split(labeled, group_col="routeKey")
     print(f"  학습 {len(train_idx)}행 / 검증 {len(test_idx)}행")
 
+    print(f"학습 중 (LightGBM × {args.seeds}시드, alpha={args.alpha})...")
+    y_train = labeled.loc[train_idx, "J"].to_numpy()
+    boosters = model.train_ensemble(
+        X.loc[train_idx], y_train, meta.loc[train_idx],
+        n_seeds=args.seeds, alpha=args.alpha, epsilon=args.epsilon, num_boost_round=args.boost_rounds,
+    )
+
     if len(test_idx) == 0:
         print("  검증 집합이 비었다 — 데이터가 너무 적다. 평가를 건너뛴다.")
-        y_train = labeled.loc[train_idx, "J"].to_numpy()
-        boosters = model.train_ensemble(
-            X.loc[train_idx], y_train, meta.loc[train_idx],
-            n_seeds=args.seeds, alpha=args.alpha, epsilon=args.epsilon, num_boost_round=args.boost_rounds,
-        )
     else:
-        print(f"학습 중 (LightGBM × {args.seeds}시드, alpha={args.alpha})...")
-        y_train = labeled.loc[train_idx, "J"].to_numpy()
-        boosters = model.train_ensemble(
-            X.loc[train_idx], y_train, meta.loc[train_idx],
-            n_seeds=args.seeds, alpha=args.alpha, epsilon=args.epsilon, num_boost_round=args.boost_rounds,
-        )
-
         print("\n평가 (검증 집합, 조건 단위)...")
         test_df = labeled.loc[test_idx].copy()
         test_X = X.loc[test_idx]
-        pred_mean, pred_std = model.ensemble_predict(boosters, test_X)
+        pred_mean, _ = model.ensemble_predict(boosters, test_X)
         test_df["predJ"] = pred_mean
-        test_df["predJStd"] = pred_std
         # rule-based 기준선의 busy 분기(cpuPct > 80)가 쓸 조건별 서버 CPU
         test_df["cpuPct"] = test_X["cpuPct"].to_numpy()
 
@@ -193,7 +187,6 @@ def main() -> None:
     if args.distill:
         print("\n깊이 5 트리 증류 중...")
         from ugrp_train import distill
-        from ugrp_train.config import FEATURE_ORDER
 
         full_pred, _ = model.ensemble_predict(boosters, X)
         tree = distill.distill_tree(X, full_pred)

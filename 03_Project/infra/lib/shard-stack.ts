@@ -71,10 +71,6 @@ export class ShardStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     })
 
-    const subnetsFor = (name: string): ec2.SubnetSelection => ({
-      subnetGroupName: name,
-    })
-
     /*
      * 역할은 샤드마다 만들지 않고 공유한다.
      *
@@ -106,7 +102,7 @@ export class ShardStack extends Stack {
 
     const roles = { executionRole, workerRole, inertRole }
     for (let i = 0; i < collection.totalShards; i++) {
-      this.buildShard(i, { ...props, digests }, namespace, logGroup, subnetsFor, roles)
+      this.buildShard(i, { ...props, digests }, namespace, logGroup, roles)
     }
 
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName })
@@ -122,10 +118,10 @@ export class ShardStack extends Stack {
     new CfnOutput(this, 'WorkerSecurityGroup', { value: props.workerSg.securityGroupId })
     new CfnOutput(this, 'LoadSecurityGroup', { value: props.loadSg.securityGroupId })
     new CfnOutput(this, 'MeasureSubnets', {
-      value: props.vpc.selectSubnets(subnetsFor('measure')).subnetIds.join(','),
+      value: props.vpc.selectSubnets({ subnetGroupName: 'measure' }).subnetIds.join(','),
     })
     new CfnOutput(this, 'LoadSubnets', {
-      value: props.vpc.selectSubnets(subnetsFor('load')).subnetIds.join(','),
+      value: props.vpc.selectSubnets({ subnetGroupName: 'load' }).subnetIds.join(','),
     })
   }
 
@@ -134,7 +130,6 @@ export class ShardStack extends Stack {
     props: ShardStackProps & { digests: ImageDigests },
     namespace: servicediscovery.PrivateDnsNamespace,
     logGroup: logs.LogGroup,
-    subnetsFor: (name: string) => ec2.SubnetSelection,
     roles: { executionRole: iam.Role; workerRole: iam.Role; inertRole: iam.Role },
   ) {
     const { collection, digests } = props
@@ -170,12 +165,12 @@ export class ShardStack extends Stack {
      * 버전으로 되돌아가, 그 샤드가 다른 이미지로 측정하는데도 드러나지 않는다 —
      * 이미지를 다이제스트로 고정한 이유가 그대로 무너진다.
      */
-    const sutService = new ecs.FargateService(this, `Sut${pad}`, {
+    new ecs.FargateService(this, `Sut${pad}`, {
       cluster: this.cluster,
       taskDefinition: sutTask,
       desiredCount: 1,
       assignPublicIp: false,
-      vpcSubnets: subnetsFor('sut'),
+      vpcSubnets: { subnetGroupName: 'sut' },
       securityGroups: [props.sutSg],
       cloudMapOptions: {
         cloudMapNamespace: namespace,
@@ -255,12 +250,17 @@ export class ShardStack extends Stack {
        */
     })
 
-    const loadService = new ecs.FargateService(this, `Load${pad}`, {
+    /*
+     * SUT와 부하 생성기는 서비스라 계속 떠 있다. 실행할 때 뜨고 끝나면 끝나야 하는
+     * 것은 **워커뿐**이라, 오케스트레이션이 RunTask로 띄우는 대상도 워커 하나다.
+     * 캘리브레이션 → 부하 투입 → 측정 순서는 워커 안에 있다(run.mjs의 부하 그룹 루프).
+     */
+    new ecs.FargateService(this, `Load${pad}`, {
       cluster: this.cluster,
       taskDefinition: loadTask,
       desiredCount: 1,
       assignPublicIp: false,
-      vpcSubnets: subnetsFor('load'),
+      vpcSubnets: { subnetGroupName: 'load' },
       securityGroups: [props.loadSg],
       cloudMapOptions: {
         cloudMapNamespace: namespace,
@@ -273,13 +273,6 @@ export class ShardStack extends Stack {
       circuitBreaker: { enable: true, rollback: false },
     })
 
-    /*
-     * SUT와 부하 생성기는 서비스라 계속 떠 있다. 실행할 때 뜨고 끝나면 끝나야 하는
-     * 것은 **워커뿐**이라, 오케스트레이션이 RunTask로 띄우는 대상도 워커 하나다.
-     * 캘리브레이션 → 부하 투입 → 측정 순서는 워커 안에 있다(run.mjs의 부하 그룹 루프).
-     */
-    void sutService
-    void loadService
     this.workerTaskDefinitions.push(workerTask)
 
     new CfnOutput(this, `Shard${pad}`, {

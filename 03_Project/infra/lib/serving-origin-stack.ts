@@ -127,7 +127,13 @@ export class ServingOriginStack extends Stack {
       image: ecs.ContainerImage.fromEcrRepository(repo, props.sutDigest),
       logging: ecs.LogDrivers.awsLogs({ logGroup, streamPrefix: 'sut' }),
       portMappings: [{ containerPort: SUT_PORT }],
-      environment: { NODE_ENV: 'production', PORT: String(SUT_PORT) },
+      environment: {
+        NODE_ENV: 'production',
+        PORT: String(SUT_PORT),
+        // cpuPct 분모 — 랩(shard-stack)과 같은 이유·같은 유도식. 어긋나면 서버 부하
+        // 피처의 스케일이 랩과 달라져 모델이 필드에서 다른 것을 본다.
+        SUT_CPU_CORES: String(TASK_SIZE.sut.cpu / 1024),
+      },
     })
 
     /*

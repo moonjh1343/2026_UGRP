@@ -35,7 +35,13 @@
 export async function searchVus({
   target,
   tolerance = 4,
-  maxVus = 256,
+  /*
+   * 256이었다 — 그 상한에서 단일 next start 프로세스는 2코어 기준 ~69%가 한계라
+   * high(90%) 탐색이 "목표 미달"로 잘렸다. 실측(2026-08-12, 18코어 로컬,
+   * SUT_CPU_CORES=2)으로는 VU 512에서 85%, 1024에서 97%가 지속됐다 — GC·libuv
+   * 스레드가 JS 스레드 밖에서 실제 병렬성을 만든다. 2048은 그 위 여유분이다.
+   */
+  maxVus = 2048,
   floor = 1,
   measureAt,
   holdAt,

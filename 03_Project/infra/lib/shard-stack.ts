@@ -151,7 +151,17 @@ export class ShardStack extends Stack {
       image: ecs.ContainerImage.fromEcrRepository(props.repos.sut, digests.sut),
       logging: logging('sut'),
       portMappings: [{ containerPort: SUT_PORT }],
-      environment: { NODE_ENV: 'production', PORT: String(SUT_PORT) },
+      environment: {
+        NODE_ENV: 'production',
+        PORT: String(SUT_PORT),
+        /*
+         * cpuPct의 분모(lib/instrument/serverState.ts). 없으면 앱이 1로 나눠,
+         * cpu>1024인 태스크에서 부하 수준이 실제 사용률의 배수로 부풀려 기록된다 —
+         * 캘리브레이션·검증·라벨이 전부 그 값을 믿는다. 태스크 크기에서 유도해
+         * 두 값이 어긋날 수 없게 한다.
+         */
+        SUT_CPU_CORES: String(TASK_SIZE.sut.cpu / 1024),
+      },
     })
 
     /*

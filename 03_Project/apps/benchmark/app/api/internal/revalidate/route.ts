@@ -22,8 +22,14 @@ export async function POST(req: Request) {
   }
 
   // SSG 진입점만 무효화 대상이다. 나머지 모드는 요청마다 렌더되므로 캐시가 없다.
+  //
+  // **`'page'` 타입을 주면 안 된다.** 두 번째 인자는 `/m/ssg/[type]/[slug]` 같은
+  // 라우트 패턴과 짝을 이루는 형태라, 구체 URL과 조합하면 매칭되는 항목이 없어
+  // 조용히 아무것도 무효화하지 않는다 — 200을 돌려주면서 캐시는 그대로라,
+  // 워커의 "기대 miss, 관측 HIT" 불일치(grid-v1 실패)의 두 원인 중 하나였다.
+  // 구체 URL은 인자 하나로 넘겨야 그 항목 하나가 무효화된다.
   const path = `/m/ssg/${type}/${key}`
-  revalidatePath(path, 'page')
+  revalidatePath(path)
 
   return Response.json({ revalidated: path, ts: Date.now() }, {
     headers: { 'cache-control': 'no-store' },

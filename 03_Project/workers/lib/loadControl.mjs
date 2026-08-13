@@ -55,8 +55,19 @@ async function fetchJson(url, { method = 'GET', body, timeoutMs = 30_000, attemp
 }
 
 async function post(controlUrl, path, body) {
-  // VU 변경은 이전 부하를 전부 정리하고서 응답한다 — 그만큼 넉넉하게 준다.
-  return fetchJson(`${controlUrl}${path}`, { method: 'POST', body, timeoutMs: 60_000, what: `부하 제어 ${path}` })
+  /*
+   * VU 변경은 이전 부하를 정리하고서 응답한다 — 정리에 상한(15초)이 생겼으므로
+   * 타임아웃은 그보다 넉넉하면 된다. 시도 횟수는 서버의 자가 회복(정지 포기)이
+   * 한 번은 작동할 시간을 준다: 4차 실행에서 3회 × 60초는 웨지 앞에서 전부
+   * 소진됐다. 5회 × 30초 + 백오프면 서버가 회복할 창이 두 번 이상 열린다.
+   */
+  return fetchJson(`${controlUrl}${path}`, {
+    method: 'POST',
+    body,
+    timeoutMs: 30_000,
+    attempts: 5,
+    what: `부하 제어 ${path}`,
+  })
 }
 
 async function get(controlUrl, path) {

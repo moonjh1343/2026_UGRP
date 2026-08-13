@@ -36,16 +36,48 @@ let currentVus = 0
 /** 누적 통계. setVus로 갈아탈 때마다 이전 핸들의 stats를 여기에 합친다. */
 const totals = { requests: 0, errors: 0 }
 
+/*
+ * **stop()에 상한을 둔다.** grid-v1 4차 실행에서 /vus가 10분 넘게 무응답이 되어
+ * (GET /state는 살아 있었다 — 이벤트 루프가 아니라 이 체인이 막힌 것) 워커가
+ * 캘리브레이션 재시도를 소진하고 죽었다. 로컬에서는 같은 Node·이미지·시퀀스로
+ * 재현되지 않아 미시 원인은 미확정이지만, 어느 await가 걸렸든 abort()는 이미
+ * 불렸으므로: 건강한 러너는 다음 루프 검사에서 스스로 끝나고, 걸린 러너는 CPU를
+ * 쥐지 않은 채 매달려 있을 뿐이다. 상한 뒤 핸들을 포기하는 것이 부하 축에 주는
+ * 오염(고아 VU)보다 /vus 영구 무응답이 실험에 주는 피해(샤드 전멸)가 크다 —
+ * 포기는 반드시 로그로 남겨 사후에 그 구간을 격리할 수 있게 한다.
+ */
+const STOP_TIMEOUT_MS = 15_000
+let abandoned = 0
+
 async function setVus(n) {
   const next = Math.max(0, Math.floor(n))
   if (next === currentVus) return { vus: currentVus, changed: false }
 
-  const prev = await current.stop()
-  totals.requests += prev.requests
-  totals.errors += prev.errors
+  const t0 = Date.now()
+  const handle = current
+  const prev = await Promise.race([
+    handle.stop(),
+    new Promise((r) => setTimeout(() => r(null), STOP_TIMEOUT_MS)),
+  ])
+  if (prev === null) {
+    abandoned++
+    console.log(
+      `경고: VU ${currentVus} 정지가 ${STOP_TIMEOUT_MS}ms 안에 끝나지 않아 핸들을 포기한다 ` +
+        `(누적 ${abandoned}회) — abort는 전달됐으므로 건강한 러너는 곧 끝난다`,
+    )
+    // 뒤늦게 끝나면 통계는 그때 합친다 — 요청 수가 조용히 증발하지 않게.
+    handle.stop().then((s) => {
+      totals.requests += s.requests
+      totals.errors += s.errors
+    }).catch(() => {})
+  } else {
+    totals.requests += prev.requests
+    totals.errors += prev.errors
+  }
 
   current = await startLoad({ vus: next, profile })
   currentVus = next
+  console.log(`VU ${next} 적용 (${Date.now() - t0}ms)`)
   return { vus: currentVus, changed: true }
 }
 
@@ -91,6 +123,9 @@ const server = createServer(async (req, res) => {
       if (typeof body.vus !== 'number' || !Number.isFinite(body.vus) || body.vus < 0) {
         return json(res, 400, { error: 'vus는 0 이상의 유한한 수여야 한다' })
       }
+      // 도착을 적용과 별도로 남긴다 — 4차 실행에서 "/vus가 죽었다"는 것만 알고
+      // 요청이 도착한 뒤 막혔는지, 도착조차 못 했는지 가를 수 없었다.
+      console.log(`/vus ${body.vus} 요청 도착 (현재 ${currentVus})`)
       const out = await setVusSerialized(body.vus)
       return json(res, 200, out)
     }

@@ -76,7 +76,13 @@ async function get(controlUrl, path) {
 
 /** SUT의 CPU 스냅샷. 조회 사이의 델타를 돌려주므로 첫 조회는 기준점 리셋이다. */
 async function snapshot(base) {
-  return fetchJson(`${base}/api/internal/metrics`, { what: '메트릭 조회' })
+  /*
+   * 부하가 걸린 SUT는 이 응답이 수십 초 밀릴 수 있다 — 5차 실행에서 고부하
+   * 탐침 중 3회×30초가 전부 소진되어 워커가 죽었다. maxVus 상한(512)으로
+   * 질식 구역 자체를 피했지만, 지속 확인(3분 유지) 중의 일시 정체까지
+   * 치명상이 되지 않도록 재시도 창을 넓힌다.
+   */
+  return fetchJson(`${base}/api/internal/metrics`, { attempts: 5, what: '메트릭 조회' })
 }
 
 /**
@@ -112,7 +118,7 @@ export async function calibrateRemote({
   controlUrl,
   target,
   tolerance = 4,
-  maxVus = 2048, // 상향 근거는 load/search.mjs의 maxVus 주석
+  maxVus = 512, // 상한 근거는 load/search.mjs의 maxVus 주석 (2048은 이 태스크 크기에서 SUT를 질식시킨다)
   settleMs = 8000,
   observeMs = 20000,
   /** 지속 확인 — 안정화 30초 + 관측 3분. 평형에 닿기에 충분하고 셀 하나 값보다 짧다. */

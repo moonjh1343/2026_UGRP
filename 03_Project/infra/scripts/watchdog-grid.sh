@@ -37,16 +37,17 @@ while true; do
   if [[ "$count" != "$last_count" ]]; then last_change=$now; last_count=$count; fi
   stall_min=$(( (now - last_change) / 60 ))
 
-  # 부하 이탈 — 최근 25분 창의 워커 로그
-  drift=$(aws logs filter-log-events --log-group-name "$LG" \
-    --start-time $(( (now - 1500) * 1000 )) --filter-pattern '"부하 이탈"' \
-    --query 'length(events)' --output text 2>>"$LOG") || drift=0
-  [[ "$drift" == "None" || -z "$drift" ]] && drift=0
+  # 부하 이탈 — 최근 25분 창의 워커 로그.
+  # filter-log-events는 페이지네이션되면 length(events)를 **페이지마다 한 줄씩**
+  # 내놓는다 — 합산 없이는 "0\n0"이 산술 확장에 들어가 감시가 죽는다(실제로 죽었다).
+  count_events() {
+    aws logs filter-log-events --log-group-name "$LG" \
+      --start-time $(( (now - 1500) * 1000 )) --filter-pattern "$1" \
+      --query 'length(events)' --output text 2>>"$LOG" | awk '{s+=$1} END{print s+0}'
+  }
+  drift=$(count_events '"부하 이탈"') || drift=0
   drift_total=$(( drift_total + drift ))
-  streak2=$(aws logs filter-log-events --log-group-name "$LG" \
-    --start-time $(( (now - 1500) * 1000 )) --filter-pattern '"부하 이탈 2/"' \
-    --query 'length(events)' --output text 2>>"$LOG") || streak2=0
-  [[ "$streak2" == "None" || -z "$streak2" ]] && streak2=0
+  streak2=$(count_events '"부하 이탈 2/"') || streak2=0
 
   log "heartbeat status=$status done=$count stall=${stall_min}m drift_new=$drift drift_total=$drift_total streak2=$streak2"
 

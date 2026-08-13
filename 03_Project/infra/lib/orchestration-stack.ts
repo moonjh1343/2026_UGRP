@@ -18,6 +18,10 @@
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
+import * as events from 'aws-cdk-lib/aws-events'
+import * as targets from 'aws-cdk-lib/aws-events-targets'
+import * as iam from 'aws-cdk-lib/aws-iam'
+import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions'
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks'
 import * as logs from 'aws-cdk-lib/aws-logs'
@@ -137,6 +141,64 @@ export class OrchestrationStack extends Stack {
       timeout: Duration.hours(96),
       tracingEnabled: false,
       logs: { destination: logGroup, level: sfn.LogLevel.ERROR, includeExecutionData: false },
+    })
+
+    /*
+     * 실행이 비정상 종료되면 SUT·부하 서비스를 0으로 축소한다.
+     *
+     * 워커는 RunTask라 실행과 함께 끝나지만, SUT·부하는 desiredCount 고정 서비스라
+     * 실행이 죽어도 계속 떠서 과금된다 — grid-v1 1차(17:53)와 2차(22:34) 실패에서
+     * 각각 4시간 17분 × 40태스크, 발견까지의 시간만큼 유휴 과금이 났다. 41시간짜리
+     * 무인 실행에서 "사람이 보고 끈다"는 방어선이 아니다.
+     *
+     * 서비스 이름을 나열하지 않고 클러스터의 전 서비스를 축소한다 — 샤드 수가
+     * 바뀌어도 이 코드는 그대로다. 성공(SUCCEEDED)은 건드리지 않는다: 수집 완료 후
+     * 검증 트래픽을 보낼 수 있어야 하고, 종료는 어차피 스택 삭제로 한다.
+     */
+    const scaleDown = new lambda.Function(this, 'ScaleDownOnFailure', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      timeout: Duration.minutes(5),
+      code: lambda.Code.fromInline(`
+const { ECSClient, ListServicesCommand, UpdateServiceCommand } = require('@aws-sdk/client-ecs')
+const ecs = new ECSClient({})
+exports.handler = async (event) => {
+  const cluster = process.env.CLUSTER_ARN
+  const status = event?.detail?.status
+  console.log('실행 종료 감지', status, event?.detail?.executionArn)
+  let token
+  const services = []
+  do {
+    const page = await ecs.send(new ListServicesCommand({ cluster, nextToken: token, maxResults: 100 }))
+    services.push(...(page.serviceArns ?? []))
+    token = page.nextToken
+  } while (token)
+  for (const svc of services) {
+    await ecs.send(new UpdateServiceCommand({ cluster, service: svc, desiredCount: 0 }))
+  }
+  console.log(\`서비스 \${services.length}개를 0으로 축소\`)
+}
+`),
+      environment: { CLUSTER_ARN: props.cluster.clusterArn },
+    })
+    scaleDown.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ecs:ListServices', 'ecs:UpdateService'],
+        resources: ['*'],
+        conditions: { ArnEquals: { 'ecs:cluster': props.cluster.clusterArn } },
+      }),
+    )
+
+    new events.Rule(this, 'OnExecutionFailure', {
+      eventPattern: {
+        source: ['aws.states'],
+        detailType: ['Step Functions Execution Status Change'],
+        detail: {
+          status: ['FAILED', 'TIMED_OUT', 'ABORTED'],
+          stateMachineArn: [this.stateMachine.stateMachineArn],
+        },
+      },
+      targets: [new targets.LambdaFunction(scaleDown)],
     })
 
     new CfnOutput(this, 'StateMachineArn', { value: this.stateMachine.stateMachineArn })

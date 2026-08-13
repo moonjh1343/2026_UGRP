@@ -377,6 +377,13 @@ for (const [level, group] of byLoad) {
       const samples = { LCP: [], INP: [], TBT: [], TTFB: [] }
       const rows = []
       let cellFailed = 0
+      /*
+       * 실패 사유별 집계. `실패=14`라는 카운트만으로는 타임아웃인지 비콘 유실인지
+       * 캐시 불일치인지 사후 판정이 불가능했다 — grid-v1 1차 실행의 30~50% 표본
+       * 실패가 정확히 그렇게 원인 미상으로 남았다. 사유는 카디널리티를 줄이기 위해
+       * 앞 60자만 키로 쓴다(Playwright 예외 메시지는 URL·타임아웃 값이 붙어 서로 다르다).
+       */
+      const failReasons = new Map()
 
       for (let rep = -WARMUP; rep < REPS; rep++) {
         /*
@@ -402,6 +409,8 @@ for (const [level, group] of byLoad) {
           cellFailed++
           failedReps++
           consecutiveFailures++
+          const reasonKey = String(r.reason ?? '(사유 없음)').slice(0, 60)
+          failReasons.set(reasonKey, (failReasons.get(reasonKey) ?? 0) + 1)
           if (consecutiveFailures >= FAILURE_STREAK_LIMIT) {
             console.error(
               `\n연속 실패 ${consecutiveFailures}회(마지막 사유: ${r.reason}) — 브라우저나 서버가` +
@@ -478,13 +487,22 @@ for (const [level, group] of byLoad) {
       }
 
       measured++
-      await ckpt.complete(id, { reps: rows.length, failed: cellFailed, summary, status: 'ok' })
+      const failBreakdown = Object.fromEntries(failReasons)
+      await ckpt.complete(id, {
+        reps: rows.length,
+        failed: cellFailed,
+        failReasons: failBreakdown,
+        summary,
+        status: 'ok',
+      })
 
       const el = ((Date.now() - startedAt) / 60000).toFixed(1)
+      const failNote = cellFailed
+        ? ` 실패=${cellFailed} (${[...failReasons].map(([k, n]) => `${k}×${n}`).join(', ')})`
+        : ''
       console.log(
         `  ${String(measured).padStart(4)}/${cells.length}  ${id.padEnd(52)} ` +
-          `LCP=${Math.round(summary.LCP.median)}ms n=${summary.LCP.n}` +
-          `${cellFailed ? ` 실패=${cellFailed}` : ''}  [${el}분]`,
+          `LCP=${Math.round(summary.LCP.median)}ms n=${summary.LCP.n}${failNote}  [${el}분]`,
       )
     }
   } finally {

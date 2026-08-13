@@ -13,10 +13,10 @@
     "ugrp:shardCount": 20,
     "ugrp:experiment": "grid-v1",
 
-    "//digests": "scripts/push-images.sh가 찍어준 값. 커밋 425bbf202e45로 빌드했다 — 이미지를 다시 만들면 태그(=커밋 SHA)와 다이제스트가 함께 바뀌므로 이 블록도 같은 커밋에서 갱신한다. 이번에도 셋 다 바뀌었다: 코드 정리(sut 계측·워커 반환 필드), SUT_CPU_CORES 주입과 짝이 되는 maxVus 256→2048(worker가 담는 load/search.mjs와 loadControl.mjs — 옛 워커 이미지로는 high(90%) 캘리브레이션이 ~69%에서 잘린다), load/search.mjs 상한. 부하 생성기(load/)를 고치면 worker도 함께 바뀐다 — 워커 이미지가 load/를 담기 때문이다(run.mjs가 로컬 모드에서 generator.mjs를, loadControl.mjs가 search.mjs를 임포트한다).",
+    "//digests": "scripts/push-images.sh가 찍어준 값. sut·worker는 커밋 7bb9ab4adf96로 빌드했다(grid-v1 실패 수정: SUT .next 소유권 EACCES, revalidatePath no-op, 워커 실패 사유 집계) — 이미지를 다시 만들면 태그(=커밋 SHA)와 다이제스트가 함께 바뀌므로 이 블록도 같은 커밋에서 갱신한다. load는 코드 변경이 없어 425bbf202e45 빌드를 유지한다. 부하 생성기(load/)를 고치면 worker도 함께 바뀐다 — 워커 이미지가 load/를 담기 때문이다(run.mjs가 로컬 모드에서 generator.mjs를, loadControl.mjs가 search.mjs를 임포트한다).",
     "ugrp:digests": {
-      "sut": "sha256:3da5aa153052700edab75e9ed3f9fdeda304d1a889e808287f6f8c65ee7a543d",
-      "worker": "sha256:7e9eb3722c3b73c98e34f28f47d7c5fb942608c406263bc2f2cb393376ef094f",
+      "sut": "sha256:a223b3c3d908c6e0e569617c5aa9732cc9479e5a7af76ef97cf82fdcc509c944",
+      "worker": "sha256:45235ce1ef5722322f429ecb02c771a905909d1fbbc29f08b344a902f88c6cb9",
       "load": "sha256:acba9efea20969f99c8dff49753666937e73f1742faef17e9a3f0d9cd435ea79"
     }
   }

@@ -37,7 +37,10 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+# `.next`만 node 소유로 넘긴다 — ISR 재검증이 prerender 캐시를 이 안에 다시 쓴다.
+# root 소유로 두면 revalidate가 EACCES로 조용히 실패해 SSG 캐시 상태 축(miss/stale)이
+# 만들어지지 않는다(grid-v1 1·2차 실행을 죽인 원인). 나머지는 읽기 전용이 맞다.
+COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.mjs ./next.config.mjs

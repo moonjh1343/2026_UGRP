@@ -23,7 +23,7 @@ const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
 const SETTLE_MS = Number(process.env.SETTLE_MS ?? 8000)
 /** 안정 후 관측 시간. **이 구간 전체를 한 번의 델타로** 잰다 — 아래 measureAt 주석 참조. */
 const OBSERVE_MS = Number(process.env.OBSERVE_MS ?? 20000)
-const MAX_VUS = Number(process.env.MAX_VUS ?? 2048) // 상향 근거는 search.mjs의 maxVus 주석
+const MAX_VUS = Number(process.env.MAX_VUS ?? 512) // 상한 근거는 search.mjs의 maxVus 주석
 /** 목표 CPU와의 허용 오차(%p). 이보다 가까우면 탐색을 멈춘다. */
 const TOLERANCE = Number(process.env.TOLERANCE ?? 4)
 /*

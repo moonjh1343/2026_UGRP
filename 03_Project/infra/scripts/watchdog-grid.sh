@@ -25,8 +25,16 @@ while true; do
   now=$(date +%s)
   if (( now > DEADLINE )); then log "EXIT: 60시간 상한 도달"; exit 2; fi
 
-  status=$(aws stepfunctions describe-execution --execution-arn "$EXEC_ARN" \
-    --query status --output text 2>>"$LOG") || status=UNKNOWN
+  # 일시적 API 오류(네트워크·스로틀)를 종료 신호로 오판하지 않는다 — 6차 실행
+  # 감시가 33분에 그렇게 죽었다. UNKNOWN은 재시도하고, 3회 연속일 때만 포기한다.
+  status=UNKNOWN
+  for try in 1 2 3; do
+    status=$(aws stepfunctions describe-execution --execution-arn "$EXEC_ARN" \
+      --query status --output text 2>>"$LOG") || status=UNKNOWN
+    [[ "$status" != "UNKNOWN" ]] && break
+    log "상태 조회 실패 ${try}/3 — 30초 뒤 재시도"
+    sleep 30
+  done
   if [[ "$status" != "RUNNING" ]]; then log "EXIT: 실행 상태 $status"; exit 0; fi
 
   # 진행도 — grid-v1 파티션의 완료 항목 수 (셀 done + 메타/캘리브레이션 소수)

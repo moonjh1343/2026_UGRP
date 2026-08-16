@@ -79,7 +79,7 @@ mode*(x, r) = argmin over m ∈ M(r) of Ĵ(x, m)
    n<30 흔함), 샤드별 실측 `cpuPct`, 캐시 축(miss/hit/stale) 전이가 기대대로인지.
 3. `training/`에서 `--runs grid-v1 --distill` → `npm run check:tree` → `policy/model/`
    교체 → 서빙 평면 배포(`edge/README.md`).
-4. 논문 6·7장 수치 채우기(`docs/paper-outline.md`).
+4. 논문 5장 수치 채우기(`docs/paper-outline.md`).
 
 ---
 

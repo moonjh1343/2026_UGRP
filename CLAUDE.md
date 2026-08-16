@@ -234,7 +234,7 @@ Non-ASCII directory names — quote paths in shell commands.
 - `00_Main/`, `01_연구 계획서/` — proposal submissions (PDF/DOCX)
 - `02_참고 논문/` — reference papers on CSR/SSR performance
 - `99_기타/` — past UGRP award reports, admin documents
-- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (thesis outline; chapters 6–7 wait on stage 6)
+- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (thesis outline; chapter 5 waits on stage 6)
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.

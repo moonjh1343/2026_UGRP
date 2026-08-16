@@ -55,14 +55,31 @@ mode*(x, r) = argmin over m ∈ M(r) of Ĵ(x, m)
 모드 자체가 서버 부하를 바꾸는데 부하가 특징이기도 하다) 생성기가 목표 CPU에 맞춘 VU 수로
 부하를 고정하고, 측정 요청 하나가 그 위에 올라탄다.
 
-### 현재 상태 (2026-08 기준)
+### 현재 상태 (2026-08-16 기준)
 
-1~5단계와 7단계 **코드는 전부 완성**되어 각자의 검증 게이트를 통과했다. 없는 것은 **데이터**다:
+1~5단계와 7단계 **코드는 전부 완성**되어 각자의 검증 게이트를 통과했고, 6단계 본수집이
+거의 끝났다:
 
-- 6단계(본수집)는 파일럿뿐 — `workers/runs/pilot-low-idle/`, 600셀 슬라이스 중 17셀.
-- 정책이 서빙하는 트리는 아직 `v0-unfitted` 플레이스홀더.
-- `training/out/`의 평가 리포트는 n=2 조건짜리 스모크 테스트 산출물이다. 결과로 읽지 말 것.
-- 본수집 비용은 30 reps 기준 약 $282–343. reps 20으로 줄이면 30만원 안에 든다.
+- **6단계 본수집 `grid-v1`** — 20 Fargate 샤드, 10,400셀 × 30 reps. 2026-08-14 01:26 시작,
+  8/16 기준 97%(high 부하 샤드 2개가 꼬리, 8/18 새벽 완료 예상). 데이터는 S3
+  `ugrp-grid-v1-data-results25575328-fm3me6shxv6z/experiment=grid-v1/`, 체크포인트는
+  DynamoDB. 이전 파일럿(`workers/runs/pilot-low-idle/`, slice-b2)은 SSG 캐시 축이
+  revalidate no-op 버그로 의심 대상이라 학습에 쓰지 않는다.
+- 부하 축은 제안서의 30/65/90이 아니라 **30/50/70% CPU**다 — 2 vCPU SUT의 천장이 ~71%라
+  90%는 도달 불가(`load/README.md`). high 셀은 실측 63.8–68.9%가 기록된다.
+- 정책이 서빙하는 트리는 아직 `v0-unfitted` 플레이스홀더. `training/out/`의 평가 리포트는
+  n=2 조건짜리 스모크 테스트 산출물이다 — 결과로 읽지 말 것.
+- 비용: 제안서 추정 $282–343 → 실측 약 **$440**(실패한 시도 5회의 유휴 과금 + high 샤드
+  꼬리 1.5일). 예산 ₩300,000 + 크레딧 $160을 ~$60 넘겼다.
+
+### 다음 단계 (수집 종료 후)
+
+1. 잔여 서비스 0 → `Orchestration`·`Shards` 스택 삭제(`infra/README.md` "수집이 끝나면").
+2. `aws s3 sync`로 `workers/runs/grid-v1/`에 받고 데이터 검증 — 부하 수준별 n 분포(high는
+   n<30 흔함), 샤드별 실측 `cpuPct`, 캐시 축(miss/hit/stale) 전이가 기대대로인지.
+3. `training/`에서 `--runs grid-v1 --distill` → `npm run check:tree` → `policy/model/`
+   교체 → 서빙 평면 배포(`edge/README.md`).
+4. 논문 6·7장 수치 채우기(`docs/paper-outline.md`).
 
 ---
 
@@ -153,7 +170,8 @@ hydrate), `shell.tsx`(공통 골격). 페이지 파일은 얇고 모드 차이�
 
 - `generator.mjs` — k6의 로컬 대역. VU 루프(생각시간 + 요청)로 SUT에 부하를 건다.
 - `control.mjs` — HTTP 제어 API(`/vus`). Fargate에서 도는 것이 이것이고 워커가 원격 조종한다.
-- `search.mjs` / `calibrate.mjs` — 목표 CPU(30/65/90%) → VU 수 이진 탐색.
+- `search.mjs` / `calibrate.mjs` — 목표 CPU(30/50/70%) → VU 수 지수 탐침·이진 탐색·지속 확인.
+  `maxVus` 512 — 그 위는 SUT가 관측 불가가 된다(`load/README.md`).
 - `profile.json` — 요청 믹스. **k6 배포 스크립트와 로컬 생성기가 같은 파일을 읽는 것**이
   캘리브레이션 값의 이식성을 만든다.
 

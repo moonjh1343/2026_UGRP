@@ -28,6 +28,14 @@ npm run synth                       # cdk.out/에 템플릿 생성 — 계정 �
 npm run deploy -- --all             # 자격증명 필요
 ```
 
+수집 운영은 `scripts/`의 셋으로 한다 — 각 파일 머리 주석이 그 절차를 만든 사고를 적고 있다:
+
+```bash
+./scripts/push-images.sh [sut|worker|load]   # 빌드 → ECR → 다이제스트 출력(cdk.json에 붙여 커밋)
+./scripts/start-collection.sh                # Shards+Orchestration 배포 → 전 서비스 1로 강제·안정화 대기 → SFN 시작
+./scripts/watchdog-grid.sh <execution-arn>   # 20분 심박, 이탈·무진행·종료 시 exit — exit가 곧 신호
+```
+
 컨텍스트로 규모를 바꾼다:
 
 ```bash
@@ -132,6 +140,21 @@ npx cdk deploy Ugrp-grid-v1-Shards Ugrp-grid-v1-Orchestration -c …
 수집 데이터는 영향받지 않는다 — 결과와 체크포인트는 Data 스택에 있고, 같은 `--name`으로
 다시 실행하면 완료된 셀을 건너뛴다.
 
+### CloudFormation은 `desiredCount`를 되돌려 주지 않는다
+
+서비스를 손으로(또는 실패 시 자동 축소 Lambda가) 0으로 내리면, 템플릿이 안 바뀐 서비스는
+재배포해도 **0인 채로 남는다** — 드리프트는 CFN의 관심사가 아니다. grid-v1 3차 시도가
+그렇게 죽었다(load-04가 0 → 워커의 첫 `/vus`가 fetch failed → 1분 만에 SFN 실패).
+그래서 `start-collection.sh`는 배포 뒤 전 서비스를 명시적으로 1로 놓고 `services-stable`을
+기다린 다음에야 실행을 시작한다. 실행 시작은 이 스크립트로만 한다.
+
+### 실행이 죽으면 서비스는 스스로 0이 된다
+
+Orchestration 스택에 EventBridge 규칙(SFN FAILED/TIMED_OUT/ABORTED) → Lambda가 있어
+클러스터의 모든 서비스를 `desiredCount=0`으로 내린다. 1차 시도 때 실패~발견 사이 4시간
+동안 60개 태스크가 놀며 ~$20를 태운 뒤에 넣었다. 감시 스크립트가 로컬에서 죽어도(재부팅,
+세션 종료) 무인 실패의 비용은 분 단위로 끝난다.
+
 ## 규모
 
 | 샤드 | 벽시계 | 샤드 스택 리소스 |
@@ -152,8 +175,10 @@ SUT는 태스크 단위로 이미 갈라져 있다.
 ## 캘리브레이션과 부하 제어
 
 `load/calibration.generated.json`의 VU 수(low 6 / mid 30 / high 71)는 18코어 머신에서
-1코어를 할당한 기준이다. Fargate 2 vCPU에서는 다른 값이 나오고, 그대로 쓰면 부하
-수준이 그리드가 말하는 것과 다른 값이 된다. 그래서 **워커가 실행 시점에 다시 잡는다.**
+1코어를 할당한, 목표가 아직 30/65/90이던 시절의 값이다. Fargate 2 vCPU에서는 다른 값이
+나오고(grid-v1 실측: low VU 40–56, mid 96–192, high 512 상한에서 63.8–68.9%), 그대로
+쓰면 부하 수준이 그리드가 말하는 것과 다른 값이 된다. 그래서 **워커가 실행 시점에 다시
+잡는다.** 목표가 30/50/70인 이유와 high가 천장에 걸리는 이유는 `load/README.md`.
 
 부하 생성기는 `load/control.mjs`로 뜨고 VU 0에서 지시를 기다린다. 워커가
 `LOAD_CONTROL_URL`로 VU를 놓고 SUT의 `/api/internal/metrics`를 읽으며 이진 탐색한다 —
@@ -178,6 +203,29 @@ Fargate 태스크에는 남는 디스크가 없다. 워커는 `UGRP_RESULTS_BUCK
 aws s3 sync s3://<버킷>/experiment=<실험>/ 03_Project/workers/runs/<실험>/
 cd 03_Project/training && python scripts/train.py --runs <실험> --distill
 ```
+
+## 수집이 끝나면 — 정리 순서
+
+샤드는 서로 독립이라 **먼저 끝난 샤드의 SUT·부하 서비스는 실행 중에도 0으로 내려도 된다**
+(high 샤드가 항상 꼬리라, 나머지 15개를 세워 두면 시간당 ~$5가 헛돈다):
+
+```bash
+CLUSTER=$(aws ecs list-clusters --query "clusterArns[?contains(@,'Ugrp-grid-v1-Shards')]|[0]" --output text)
+aws ecs update-service --cluster "$CLUSTER" --service <Sut07Service…> --desired-count 0   # Load07도 같이
+```
+
+실행이 끝나면(SFN SUCCEEDED/FAILED) Orchestration → Shards 순으로 지운다. Data(S3·DynamoDB·
+ECR — RETAIN)와 Network는 남긴다; 재실행·다른 실험은 같은 Data 위에 올린다.
+
+```bash
+npx cdk destroy Ugrp-grid-v1-Orchestration Ugrp-grid-v1-Shards --force
+```
+
+grid-v1 실측 비용: 20샤드 온디맨드 ~$6.3/h(전 샤드 가동 시), 6차 실행 ~64h(꼬리 포함) +
+사전 시도·파일럿 ≈ **$440**. 제안서 추정(41–48h, $282–343)과의 차이는 (1) 5차례 실패한
+시도의 유휴 과금 (2) high 샤드 꼬리 ~1.5일 — high 셀은 표본 실패 재시도로 다른 수준의
+2배 이상 느리다. 다음 실험은 high 샤드 수를 늘려 꼬리를 나누는 것이 벽시계·비용 모두에서
+이득이다(`lib/shard.mjs`가 실험 정의이므로 그 변경도 커밋에 남긴다).
 
 ## 정책 서빙 평면
 

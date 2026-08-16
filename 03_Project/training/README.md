@@ -11,6 +11,11 @@ pip install -r requirements.txt
 python scripts/fetch_routes.py           # 라우트 정적 특징 스냅샷 (앱 서버가 떠 있어야 함)
 python scripts/train.py                  # runs/ 아래 모든 실험으로 학습
 python scripts/train.py --runs pilot-low-idle --distill --out out/pilot
+
+# 본수집(grid-v1) — 먼저 S3에서 받는다 (workers/README.md '학습 쪽으로 가져오기')
+aws s3 sync s3://ugrp-grid-v1-data-results25575328-fm3me6shxv6z/experiment=grid-v1/ ../workers/runs/grid-v1/
+python scripts/train.py --runs grid-v1 --distill --out out/grid-v1
+cd ../apps/benchmark && npm run check:tree   # policy/model/에 복사하기 전 게이트
 ```
 
 수집이 끝나지 않아도 지금 있는 부분 데이터로 돌아간다 — 표본이 적으면 경고를 내고
@@ -109,3 +114,12 @@ cd ../apps/benchmark && npm run check:tree     # 기본 대상: training/out/tre
   실제 요청률을 재현하지 않는다. `cpuPct`·`eventLoopP95Ms`만 실험의 `calibration` 블록에서
   부하 수준별 실측값을 가져온다.
 - **C_store가 항상 0.** 위 참조.
+- **부하 축은 30/50/70이고 `high`는 목표 미달이다.** 제안서의 30/65/90은 2 vCPU SUT에서
+  도달 불가라 재정의했다(`load/README.md`). `high` 셀의 실측 지속 CPU는 63.8–68.9%로
+  샤드마다 다르며, `features.py`가 행에 붙이는 값은 목표가 아니라 그 실측값이다 —
+  부하 축을 범주로 다루면 안 되고, `cpuPct` 그대로 연속 피처로 두는 것이 맞다.
+- **`high` 셀은 n<30이 흔하다.** "비콘 미도착" 실패로 n=21–29인 셀이 많다
+  (`workers/README.md`). 셀 단위 통계(N-rep 평균 `serverRenderCpuUs`, z-score 분산)를
+  n으로 가중하지 않으면 high 조건의 잡음이 과소평가된다.
+- **파일럿·slice-b2의 SSG 캐시 축은 의심 대상.** `revalidatePath` no-op 버그(grid-v1 이전
+  이미지)로 miss 셀이 실제로는 hit였을 수 있다. 학습에는 `grid-v1`만 쓴다.

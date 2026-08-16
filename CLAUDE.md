@@ -5,15 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository status
 
 Every plane below is implemented and tracked — SUT, load generator, measurement workers, CDK
-infrastructure, edge serving plane, training pipeline. What is missing is **data**: stage 6
-collection has only run a pilot slice, so the tree the policy actually serves is still the
-`v0-unfitted` placeholder.
+infrastructure, edge serving plane, training pipeline. What is missing is a **trained model**:
+the full-grid collection (`grid-v1`, 20 Fargate shards) started 2026-08-14 and its data lives
+in S3 + DynamoDB, not under `workers/runs/`; the tree the policy actually serves is still the
+`v0-unfitted` placeholder until stage 7 runs on that data.
 
 | 단계 | 상태 |
 |---|---|
 | 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
 | 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
-| 6 factorial 수집 | 파일럿뿐 — `workers/runs/pilot-low-idle/` (600셀 슬라이스 중 17셀) |
+| 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — 8/16 기준 97%, high 부하 샤드 2개가 꼬리. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
 | 7 학습 파이프라인 | 배선 완료, 학습된 모델 없음 (`policy/model/tree.v0.json` = `v0-unfitted`) |
 
 Anything under `training/out/` is a smoke-test artifact until stage 6 finishes —
@@ -99,6 +100,23 @@ npm run synth                      # no credentials needed
 npx cdk synth -c ugrp:shardCount=40
 ```
 
+The collection runbook is `infra/scripts/` — read the header comments, each records a failure
+that shaped it:
+
+```bash
+./scripts/push-images.sh [sut|worker|load]   # build → ECR → prints digests; paste into cdk.json and commit
+npx cdk destroy Ugrp-grid-v1-Orchestration --force   # required before a Shards update that changes a worker digest (export lock)
+./scripts/start-collection.sh                # deploy Shards+Orchestration, force every service to 1 and wait, start SFN
+./scripts/watchdog-grid.sh <execution-arn>   # 20-min heartbeat; exits on stall/drift/end — exit is the signal
+```
+
+`cdk.json`'s `ugrp:digests` is experiment metadata: the worker image contains `load/`, so
+changing the load generator changes the worker digest too. The digest bump is its own commit.
+The watchdog runs on the operator's machine and dies with it (reboot, session end) — the
+collection does not, and an EventBridge→Lambda rule scales all services to 0 if the SFN
+execution fails, so an unattended failure costs minutes, not hours. Finished shards' SUT/load
+services can be scaled to 0 by hand while others still run — shards are independent.
+
 **`run.mjs` is one binary for both worlds; three environment variables decide which.**
 `LOAD_CONTROL_URL` switches the load generator from in-process (stored calibration) to a
 remote task whose VU count is re-searched at run time — a VU count calibrated on one machine
@@ -162,7 +180,7 @@ it records where the built system deliberately departs from it.
 
 1. **SUT** — Next.js App Router on ECS Fargate behind ALB + CloudFront, implementing all five render modes in one codebase. Task cpu/memory are experiment variables. ElastiCache holds mode-keyed caches; DynamoDB holds session profiles and bandit state.
 2. **Client measurement** — AWS Batch/Fargate Playwright workers driving CDP (`Emulation.setCPUThrottlingRate`, `Network.emulateNetworkConditions`) for ~95% of cells, real multi-region workers for true RTT (origin pinned to `ap-northeast-2`), EC2 + `tc`/netem where kernel-level control is needed, and Device Farm for a ~5% real-device calibration subset.
-3. **Load injection** — k6 on Fargate Spot, on a separate subnet/security group from measurement workers. VU count is binary-searched to hit target CPU (30/65/90%) and then frozen into the cell definition.
+3. **Load injection** — k6 on Fargate Spot, on a separate subnet/security group from measurement workers. VU count is binary-searched to hit target CPU (proposal: 30/65/90 %; built system: 30/50/70 %, see below) and then frozen into the cell definition.
 4. **Data plane** — `web-vitals/attribution` in the worker → `sendBeacon` → Kinesis Firehose → S3 Parquet (partitioned by date and experiment id) → Glue/Athena.
 5. **Training/serving** — SageMaker (Processing → Training → HPO → Model Registry) → distilled tree → AppConfig → Lambda@Edge.
 
@@ -182,18 +200,21 @@ deployed anywhere.
 - **No AppConfig.** The distilled tree is baked into the edge bundle and model replacement is a deploy; Lambda@Edge has no environment variables to point at AppConfig with, and a fetch on cold start would sit in the request path. Fast rollback is the circuit breaker's job. `edge/README.md`
 - **Decision runs at origin-request, not viewer-request.** Cache hits have nothing to decide. `edge/README.md`
 - **Lab collection has no ALB and no CloudFront.** A CDN in front would erase the cache-state axis the grid exists to observe. `infra/README.md`
+- **Load axis is 30/50/70 % CPU, not 30/65/90.** A single-process `next start` on a 2 vCPU Fargate task tops out at ~71 % (VU 512 → 66–71 %, VU 1024 → same RPS, VU 2048 → the metrics endpoint stops answering). 90 % is unreachable, so `load/profile.json` targets were redefined and `maxVus` is 512. `high` cells record the *measured* sustained CPU (63–69 %), and a "목표 미달" calibration warning is expected there. `load/profile.json`, `load/search.mjs`
 - **`ServerCost` in the labels is partly unmeasured.** The `missRate` formula is replaced by observed render occurrence (background load deliberately avoids the measured routes, so `rps_r` is meaningless there), per-row `serverRenderCpuUs` is replaced by an N-rep mean because of timer quantization, and `C_serve`/`C_store` are **0 — not approximated, uninstrumented**. `training/README.md`
 
 ## Failures that pass silently
 
 The expensive bugs in this repo do not throw. They produce a plausible number and a green
-check. The full lists live in the sub-READMEs; these four span more than one package:
+check. The full lists live in the sub-READMEs; these span more than one package:
 
 - **Classifying headless Chrome as a bot.** Every worker request hard-pins to SSR and `check:policy` passes while comparing ssr against ssr. This actually happened on the first stage-4 run.
 - **CDP throttling does not change Client Hints.** Unless workers inject `x-cell-device-tier`/`x-cell-effective-type`, the device and network features are constant across the whole lab dataset — the two axes the model exists to learn.
 - **Feature-order drift between `policy/features.ts` and `training/config.py`.** Train-serve skew with no error; `surrogate.ts`'s `x[cur.feature] ?? 0` reads a missing feature as 0. `npm run check:tree` is the gate — run it before copying any tree into `policy/model/`.
 - **A floating Promise for the server-state refresh.** Cancelled after the response returns, so the cache stays empty and every server-state feature is 0, forever, without an error. Use `event.waitUntil`.
 - **Calibrating the load level on a short burst.** A fixed VU count pins *concurrency*, not CPU: throughput is `concurrency / (thinkTime + responseTime)`, and response time grows as the SUT saturates, so sustained CPU settles below what a 20-second window measures. Every load level in slice-b2 sat 12–16%p under its calibration. The number lands in `experiment.json`, `features.py` maps it onto every row of that level, and the load axis is then labelled with a CPU the server never had. `calibrateRemote` searches on bursts but records a **sustained** hold — the value the drift verifier compares against during measurement.
+- **CloudFormation does not restore `desiredCount`.** A service scaled to 0 by hand or by the failure Lambda stays at 0 across redeploys whose template didn't change for it; the worker's first `/vus` call then fails and the whole SFN dies in a minute. `start-collection.sh` forces every service to 1 and waits — do not start an execution any other way.
+- **High-load cells lose samples to "비콘 미도착".** Under `high` load, 10–30 % of reps time out before the beacon lands, so those cells finish with n=21–29 and run ~2× slower than the rest (the high shards are the tail of every collection). It is a Fargate-only effect (0/60 locally); the reason breakdown is in each cell summary and checkpoint. Check the per-load n distribution before training.
 
 ## Reproducibility requirements
 
@@ -213,14 +234,14 @@ Non-ASCII directory names — quote paths in shell commands.
 - `00_Main/`, `01_연구 계획서/` — proposal submissions (PDF/DOCX)
 - `02_참고 논문/` — reference papers on CSR/SSR performance
 - `99_기타/` — past UGRP award reports, admin documents
-- `03_Project/docs/` — design documents
+- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (thesis outline; chapters 6–7 wait on stage 6)
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.
-- `03_Project/infra/` — AWS CDK app: network, data, shards, orchestration, serving. `cdk.out/` is gitignored.
+- `03_Project/infra/` — AWS CDK app: network, data, shards, orchestration, serving. `scripts/` is the collection runbook. `cdk.out/` is gitignored.
 - `03_Project/edge/` — policy serving plane. A thin adapter over `policy/`, not a second copy of it. `dist/` and `src/config.generated.js` are generated.
 - `03_Project/workers/` — Playwright measurement workers. `lib/grid.mjs` and `lib/shard.mjs` are the version-controlled experiment definition, not script parameters.
-- `03_Project/workers/runs/` — collected data (gitignored).
+- `03_Project/workers/runs/` — local pilot data (gitignored). Cloud runs land in S3 (`experiment=/dt=/shard=/<cell>.jsonl`).
 - `03_Project/training/` — Python training pipeline (stage 7). `ugrp_train/` is the package,
   `scripts/` the CLI entry points. `data/` and `out/` are gitignored (generated).
 

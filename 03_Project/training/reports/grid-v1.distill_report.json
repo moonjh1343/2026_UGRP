@@ -1,0 +1,9 @@
+{
+  "fidelityR2VsEnsemble": 0.9795773361983118,
+  "n": 400,
+  "top1Rate": 0.735,
+  "meanRegret": 0.07224064275851019,
+  "medianRegret": 0.0,
+  "p95Regret": 0.5589867721895198,
+  "pairwiseAccuracy": 0.5970394736842105
+}

@@ -18,6 +18,15 @@ python scripts/train.py --runs grid-v1 --distill --out out/grid-v1
 cd ../apps/benchmark && npm run check:tree   # policy/model/에 복사하기 전 게이트
 ```
 
+λ 스윕·절제·증류 깊이(논문 7.4·7.7)는 `scripts/sweep.py`가 한 번에 돌린다 — 데이터는 한 번
+읽고 설정만 바꿔 반복하며, 절제는 항상 기준 라벨(λ=1)로 채점한다. grid-v1 결과는
+`reports/grid-v1.sweep.{json,log}`.
+
+```bash
+python scripts/sweep.py --runs grid-v1 --out out/sweep            # 5시드×200라운드, ~1.5시간
+python scripts/sweep.py --runs grid-v1 --seeds 1 --boost-rounds 20 --only lambda,depth   # 빠른 확인
+```
+
 수집이 끝나지 않아도 지금 있는 부분 데이터로 돌아간다 — 표본이 적으면 경고를 내고
 계속 진행한다. 파이프라인이 죽었는지 확인하려고 6단계가 끝나기를 기다릴 필요가 없다.
 

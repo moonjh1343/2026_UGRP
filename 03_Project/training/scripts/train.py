@@ -47,7 +47,9 @@ def main() -> None:
     ap.add_argument("--epsilon", type=float, default=0.1, help="pairwise 힌지 마진")
     ap.add_argument("--boost-rounds", type=int, default=200)
     ap.add_argument("--lambda", dest="lam", type=float, default=1.0, help="ServerCost 가중치")
-    ap.add_argument("--distill", action="store_true", help="깊이 5 트리까지 증류")
+    ap.add_argument("--distill", action="store_true", help="트리 증류 (--distill-depth 참고)")
+    ap.add_argument("--distill-depth", type=int, default=5,
+                    help="증류 트리 깊이. λ<1은 문맥 상호작용 때문에 5로 부족하다 — reports/grid-v1.depth-*.json")
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[1] / "out"))
     args = ap.parse_args()
 
@@ -185,11 +187,11 @@ def main() -> None:
         print(f"\n평가 리포트 → {report_path}")
 
     if args.distill:
-        print("\n깊이 5 트리 증류 중...")
+        print(f"\n깊이 {args.distill_depth} 트리 증류 중...")
         from ugrp_train import distill
 
         full_pred, _ = model.ensemble_predict(boosters, X)
-        tree = distill.distill_tree(X, full_pred)
+        tree = distill.distill_tree(X, full_pred, max_depth=args.distill_depth)
 
         # 경고 기준은 행 수가 아니라 **셀 커버리지**다. slice-b2는 35,988행이지만
         # 그리드의 ~11%다 — 행 수 기준(≥5000)은 "반복이 많은 좁은 슬라이스"를

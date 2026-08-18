@@ -16,7 +16,7 @@ been rebuilt/redeployed with it yet.
 | 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
 | 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
 | 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — **8/17 23:20 완료(10,400/10,400셀·311,108행)**. 8/17 01:26 72h 태스크 타임아웃으로 FAILED(98.9%)된 뒤 high 샤드 15·18을 `infra/scripts/resume-shards.sh`로 재개해 마쳤다. Shards·Orchestration 스택은 철거, Data·Network만 남음. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
-| 7 학습 파이프라인 | **grid-v1로 학습 완료(2026-08-18)** — `policy/model/tree.v0.json` = `trained-20260817T170754Z`(깊이 5, 잎 32, 앙상블 대비 R² 0.980). 검증(라우트 홀드아웃 400조건): surrogate top-1 76.8%·regret 평균 0.037 vs rule-based 25.0%·1.270; 증류 트리 73.5%·0.072. `check:tree`·`check:policy` 통과. 리포트 `training/reports/grid-v1.*.json` |
+| 7 학습 파이프라인 | **grid-v1로 학습 완료, 배포 λ=0.3·깊이 12(2026-08-19)** — `policy/model/tree.v0.json` = `trained-20260818T163155Z`(잎 2,724, 687KB, 앙상블 대비 R² 0.999). λ 스윕의 Pareto 무릎이 0.3(서버 절감 86% 확보, λ=1은 정책이 라우트 룩업으로 퇴화)이고, λ<1은 문맥 상호작용 때문에 깊이 5로 부족해 12로 확장(`--distill-depth`). 검증(라우트 홀드아웃 400조건): 앙상블 top-1 74.8%·regret 0.041, 증류 트리 74.2%·0.046, 추론 p95 0.025ms. `check:tree`·`check:policy` 통과. 근거 `training/reports/grid-v1.sweep*.json`·`grid-v1.depth-*.json`, 리포트 `grid-v1-lam0.3-d12.*.json` |
 
 `training/out/` is gitignored; the grid-v1 evaluation is checked in as `training/reports/grid-v1.*.json`.
 Note the split warning: with a full factorial every route spans the whole collection window, so the

@@ -34,6 +34,7 @@ npm run deploy -- --all             # 자격증명 필요
 ./scripts/push-images.sh [sut|worker|load]   # 빌드 → ECR → 다이제스트 출력(cdk.json에 붙여 커밋)
 ./scripts/start-collection.sh                # Shards+Orchestration 배포 → 전 서비스 1로 강제·안정화 대기 → SFN 시작
 ./scripts/watchdog-grid.sh <execution-arn>   # 20분 심박, 이탈·무진행·종료 시 exit — exit가 곧 신호
+./scripts/resume-shards.sh 15 18             # 일부 샤드만 재개 — SFN 없이 워커 RunTask 직접(끝나면 서비스 0은 수동)
 ```
 
 컨텍스트로 규모를 바꾼다:
@@ -54,6 +55,7 @@ npx cdk synth -c ugrp:shardCount=40 -c ugrp:experiment=grid-v2
 | `lib/serving-origin-stack.ts` | 공개 ALB + SUT (필드 오리진) |
 | `lib/serving-stack.ts` | CloudFront + Lambda@Edge (정책 서빙 평면) |
 | `scripts/push-images.sh` | 이미지 3종 빌드·푸시 후 다이제스트 출력 |
+| `scripts/resume-shards.sh` | 잘린 샤드만 재개 — 72h 태스크 타임아웃에 죽은 grid-v1 high 샤드 2개가 계기 |
 | `bin/ugrp.ts` | 앱 진입점 |
 
 Dockerfile은 각 컴포넌트 옆에 있다 — `apps/benchmark/Dockerfile`, `workers/Dockerfile`,
@@ -221,7 +223,7 @@ ECR — RETAIN)와 Network는 남긴다; 재실행·다른 실험은 같은 Data
 npx cdk destroy Ugrp-grid-v1-Orchestration Ugrp-grid-v1-Shards --force
 ```
 
-grid-v1 실측 비용: 20샤드 온디맨드 ~$6.3/h(전 샤드 가동 시), 6차 실행 ~64h(꼬리 포함) +
+grid-v1 실측 비용: 20샤드 온디맨드 ~$6.3/h(전 샤드 가동 시), 6차 실행 ~78h + 재개 ~9h(72h 태스크 타임아웃에 걸린 high 샤드 2개를 `resume-shards.sh`로 8/17 재개, 23:20 완료) +
 사전 시도·파일럿 ≈ **$440**. 제안서 추정(41–48h, $282–343)과의 차이는 (1) 5차례 실패한
 시도의 유휴 과금 (2) high 샤드 꼬리 ~1.5일 — high 셀은 표본 실패 재시도로 다른 수준의
 2배 이상 느리다. 다음 실험은 high 샤드 수를 늘려 꼬리를 나누는 것이 벽시계·비용 모두에서

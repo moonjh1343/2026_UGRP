@@ -70,10 +70,15 @@ export class OrchestrationStack extends Stack {
         securityGroups: [props.workerSg],
         assignPublicIp: false,
         /*
-         * 41시간짜리 일이다. 기본 타임아웃(없음)에 기대면 태스크가 매달린 채로
-         * 영원히 과금되므로 상한을 준다 — 넉넉하되 무한하지는 않게.
+         * 기본 타임아웃(없음)에 기대면 태스크가 매달린 채로 영원히 과금되므로
+         * 상한을 준다 — 넉넉하되 무한하지는 않게.
+         *
+         * 72시간이었다. grid-v1 본수집이 그 값에 죽었다(2026-08-17 01:26): high
+         * 샤드는 비콘 미도착 재시도로 다른 샤드의 2배(셀당 5~7분, stale 셀 42분)가
+         * 걸려 41시간 예상이 78시간이 되었고, 480/520·446/520에서 잘렸다. 상한은
+         * 가장 느린 샤드의 실측 × 여유로 잡는다. 남은 셀은 scripts/resume-shards.sh로.
          */
-        taskTimeout: sfn.Timeout.duration(Duration.hours(72)),
+        taskTimeout: sfn.Timeout.duration(Duration.hours(120)),
         resultPath: sfn.JsonPath.DISCARD,
       })
 
@@ -138,7 +143,7 @@ export class OrchestrationStack extends Stack {
       definitionBody: sfn.DefinitionBody.fromChainable(
         fanOut.next(new sfn.Succeed(this, 'CollectionComplete')),
       ),
-      timeout: Duration.hours(96),
+      timeout: Duration.hours(130),
       tracingEnabled: false,
       logs: { destination: logGroup, level: sfn.LogLevel.ERROR, includeExecutionData: false },
     })

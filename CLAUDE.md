@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Every plane below is implemented and tracked — SUT, load generator, measurement workers, CDK
 infrastructure, edge serving plane, training pipeline. What is missing is a **trained model**:
-the full-grid collection (`grid-v1`, 20 Fargate shards) started 2026-08-14 and its data lives
-in S3 + DynamoDB, not under `workers/runs/`; the tree the policy actually serves is still the
+the full-grid collection (`grid-v1`, 20 Fargate shards) ran 2026-08-14 → 08-17 and its data lives
+in S3 + DynamoDB (a local copy is synced to `workers/runs/grid-v1/`, gitignored); the tree the policy actually serves is still the
 `v0-unfitted` placeholder until stage 7 runs on that data.
 
 | 단계 | 상태 |
 |---|---|
 | 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
 | 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
-| 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — 8/16 기준 97%, high 부하 샤드 2개가 꼬리. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
+| 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — **8/17 23:20 완료(10,400/10,400셀·311,108행)**. 8/17 01:26 72h 태스크 타임아웃으로 FAILED(98.9%)된 뒤 high 샤드 15·18을 `infra/scripts/resume-shards.sh`로 재개해 마쳤다. Shards·Orchestration 스택은 철거, Data·Network만 남음. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
 | 7 학습 파이프라인 | 배선 완료, 학습된 모델 없음 (`policy/model/tree.v0.json` = `v0-unfitted`) |
 
 Anything under `training/out/` is a smoke-test artifact until stage 6 finishes —

@@ -123,3 +123,9 @@ cd ../apps/benchmark && npm run check:tree     # 기본 대상: training/out/tre
   n으로 가중하지 않으면 high 조건의 잡음이 과소평가된다.
 - **파일럿·slice-b2의 SSG 캐시 축은 의심 대상.** `revalidatePath` no-op 버그(grid-v1 이전
   이미지)로 miss 셀이 실제로는 hit였을 수 있다. 학습에는 `grid-v1`만 쓴다.
+- **`TTFB`에는 에뮬레이션된 RTT가 안 들어 있다.** Chromium의 `Network.emulateNetworkConditions`
+  latency는 응답 **본문** 전달을 늦추지 헤더 도착(`responseStart`)은 늦추지 않는다 —
+  grid-v1에서 idle TTFB 중앙값이 5g·offline-first 모두 ~15ms인 이유이고, 로컬 재현으로
+  확인했다(latency 900 → responseStart 3ms, responseEnd 930ms). LCP·responseDuration에는
+  RTT가 반영되므로 QoE 라벨은 유효하지만, `QOE_WEIGHTS`의 TTFB 항(0.1)은 서버 시간만 재는
+  지표로 읽어야 한다. 네트워크 조건의 RTT는 헤더(`x-cell-rtt-ms`)로 피처에 들어간다.

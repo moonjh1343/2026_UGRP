@@ -1,0 +1,261 @@
+{
+  "version": "trained-20260818T005810Z",
+  "distilledFrom": {
+    "nSeeds": 5,
+    "alpha": 0.3,
+    "boostRounds": 200
+  },
+  "trainedOn": {
+    "nRows": 311108,
+    "nTrainRows": 248886,
+    "nCells": 10400,
+    "experiments": [
+      "grid-v1"
+    ]
+  },
+  "maxDepth": 5,
+  "maxDepthBudget": 5,
+  "target": "J_hat",
+  "unit": "라우트별 z-정규화된 QoE 비용 + λ·ServerCost (낮을수록 좋음)",
+  "warning": null,
+  "features": [
+    "bundleKB",
+    "cpuPct",
+    "deviceTier",
+    "effectiveTypeIdx",
+    "fetchDepth",
+    "interactiveCount",
+    "mode",
+    "personalizedRatio",
+    "rttMs",
+    "seoWeight"
+  ],
+  "modeIndex": {
+    "csr": 0,
+    "ssr": 1,
+    "stream": 2,
+    "ssg": 3,
+    "islands": 4
+  },
+  "root": {
+    "feature": "fetchDepth",
+    "threshold": 1.5,
+    "left": {
+      "feature": "deviceTier",
+      "threshold": 1.5,
+      "left": {
+        "feature": "mode",
+        "threshold": 2.5,
+        "left": {
+          "feature": "personalizedRatio",
+          "threshold": 0.25,
+          "left": {
+            "feature": "rttMs",
+            "threshold": 650.0,
+            "left": {
+              "leaf": 1.4952
+            },
+            "right": {
+              "leaf": 2.0376
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 52.0672,
+            "left": {
+              "leaf": 0.5359
+            },
+            "right": {
+              "leaf": 1.1677
+            }
+          }
+        },
+        "right": {
+          "feature": "bundleKB",
+          "threshold": 569.035,
+          "left": {
+            "feature": "interactiveCount",
+            "threshold": 4.0,
+            "left": {
+              "leaf": 1.1203
+            },
+            "right": {
+              "leaf": 1.6131
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 60.2428,
+            "left": {
+              "leaf": 0.5676
+            },
+            "right": {
+              "leaf": 0.8938
+            }
+          }
+        }
+      },
+      "right": {
+        "feature": "mode",
+        "threshold": 2.5,
+        "left": {
+          "feature": "seoWeight",
+          "threshold": 0.45,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 60.8461,
+            "left": {
+              "leaf": -0.2672
+            },
+            "right": {
+              "leaf": 0.3262
+            }
+          },
+          "right": {
+            "feature": "personalizedRatio",
+            "threshold": 0.05,
+            "left": {
+              "leaf": 0.4567
+            },
+            "right": {
+              "leaf": 0.9999
+            }
+          }
+        },
+        "right": {
+          "feature": "bundleKB",
+          "threshold": 569.035,
+          "left": {
+            "feature": "personalizedRatio",
+            "threshold": 0.05,
+            "left": {
+              "leaf": 0.2448
+            },
+            "right": {
+              "leaf": 0.9195
+            }
+          },
+          "right": {
+            "feature": "deviceTier",
+            "threshold": 2.5,
+            "left": {
+              "leaf": -0.0197
+            },
+            "right": {
+              "leaf": -0.4762
+            }
+          }
+        }
+      }
+    },
+    "right": {
+      "feature": "mode",
+      "threshold": 1.5,
+      "left": {
+        "feature": "deviceTier",
+        "threshold": 1.5,
+        "left": {
+          "feature": "cpuPct",
+          "threshold": 60.3075,
+          "left": {
+            "feature": "rttMs",
+            "threshold": 275.0,
+            "left": {
+              "leaf": 1.7306
+            },
+            "right": {
+              "leaf": 2.2135
+            }
+          },
+          "right": {
+            "feature": "mode",
+            "threshold": 0.5,
+            "left": {
+              "leaf": 2.2686
+            },
+            "right": {
+              "leaf": 2.6406
+            }
+          }
+        },
+        "right": {
+          "feature": "cpuPct",
+          "threshold": 54.4571,
+          "left": {
+            "feature": "rttMs",
+            "threshold": 275.0,
+            "left": {
+              "leaf": 0.7692
+            },
+            "right": {
+              "leaf": 1.3212
+            }
+          },
+          "right": {
+            "feature": "effectiveTypeIdx",
+            "threshold": 1.0,
+            "left": {
+              "leaf": 2.0091
+            },
+            "right": {
+              "leaf": 1.5156
+            }
+          }
+        }
+      },
+      "right": {
+        "feature": "bundleKB",
+        "threshold": 572.365,
+        "left": {
+          "feature": "mode",
+          "threshold": 3.0,
+          "left": {
+            "feature": "deviceTier",
+            "threshold": 2.5,
+            "left": {
+              "leaf": 2.8397
+            },
+            "right": {
+              "leaf": 1.9922
+            }
+          },
+          "right": {
+            "feature": "deviceTier",
+            "threshold": 1.5,
+            "left": {
+              "leaf": 2.1911
+            },
+            "right": {
+              "leaf": 1.3468
+            }
+          }
+        },
+        "right": {
+          "feature": "deviceTier",
+          "threshold": 1.5,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 60.2698,
+            "left": {
+              "leaf": 4.083
+            },
+            "right": {
+              "leaf": 4.5955
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 60.9372,
+            "left": {
+              "leaf": 3.1448
+            },
+            "right": {
+              "leaf": 3.6932
+            }
+          }
+        }
+      }
+    }
+  },
+  "generatedAt": "2026-08-18T00:58:10.234364+00:00"
+}

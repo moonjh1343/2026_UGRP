@@ -80,6 +80,7 @@ def main() -> None:
     ap.add_argument("--lambdas", default="0,0.1,0.3,1,3,10")
     ap.add_argument("--depths", default="2,3,4,5,7")
     ap.add_argument("--only", default="lambda,ablation,depth")
+    ap.add_argument("--base-lambda", type=float, default=1.0, help="기준선·절제·증류 깊이의 채점 라벨 λ")
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[1] / "out" / "sweep"))
     args = ap.parse_args()
     out_dir = Path(args.out); out_dir.mkdir(parents=True, exist_ok=True)
@@ -94,7 +95,7 @@ def main() -> None:
     print(f"  행 {len(raw)}")
 
     # 기준 라벨(λ=1)·피처·분할 — 모든 실험이 공유
-    base = labels.compute_labels(raw, weights=QOE_WEIGHTS, lam=1.0)
+    base = labels.compute_labels(raw, weights=QOE_WEIGHTS, lam=args.base_lambda)
     X = features.build_feature_frame(base, routes, calibration=None)
     X.index = base.index
     meta = base[["device", "network", "load", "routeType", "routeKey", "mode", "ts"]]
@@ -110,7 +111,7 @@ def main() -> None:
     results: dict = {"config": vars(args), "nTrain": int(len(train_idx)), "nTest": int(len(test_idx))}
 
     # ── 기준선 (파레토 참고점) ────────────────────────────────────────────────
-    print("\n[기준선 — 기준 라벨 λ=1]")
+    print(f"\n[기준선 — 기준 라벨 λ={args.base_lambda}]")
     results["baselines"] = {}
     for m in MODES:
         feas = cond_base.groupby(evaluate.GROUP_KEYS)["mode"].transform(lambda s, m=m: (s == m).any())
@@ -134,7 +135,7 @@ def main() -> None:
             cond = attach_pred(cond, test_df, pred, "pred")
             r_own = score(cond, "pred")                          # 그 λ의 J 기준
             cond_b = attach_pred(cond_base, test_df, pred, "pred")
-            r_base = score(cond_b, "pred")                       # 기준 λ=1의 J 기준
+            r_base = score(cond_b, "pred")                       # 기준 λ의 J 기준
             orc = cond.copy(); orc["p"] = orc["J"]; r_orc = score(orc, "p")
             results["lambda"][str(lam)] = {"ownLabel": r_own, "baseLabel": r_base, "oracleOwn": r_orc}
             print(f" λ={lam}"); print(fmt("surrogate(own J)", r_own)); print(fmt("surrogate(base J)", r_base)); print(fmt("oracle(own J)", r_orc))
@@ -142,7 +143,7 @@ def main() -> None:
 
     # ── 절제 ─────────────────────────────────────────────────────────────────
     if "ablation" in only:
-        print("\n[절제] 학습 입력만 바꾸고 기준 라벨(λ=1)로 채점")
+        print(f"\n[절제] 학습 입력만 바꾸고 기준 라벨(λ={args.base_lambda})로 채점")
         results["ablation"] = {}
         y_base = base.loc[train_idx, "J"].to_numpy()
 
@@ -162,7 +163,7 @@ def main() -> None:
             nz[f"z_{m}"] = ((col - col.mean()) / col.std()).fillna(0.0)
         present = nz[QOE_METRICS].notna(); w = pd.Series(QOE_WEIGHTS)
         qoe = sum(nz[f"z_{m}"] * present[m] * w[m] for m in QOE_METRICS) / sum(present[m] * w[m] for m in QOE_METRICS)
-        y_nz = (qoe.fillna(0.0) + 1.0 * nz["serverCostMs"]).loc[train_idx].to_numpy()
+        y_nz = (qoe.fillna(0.0) + args.base_lambda * nz["serverCostMs"]).loc[train_idx].to_numpy()
         run("no-route-zscore", X.loc[train_idx], y_nz, X.loc[test_idx])
 
         # 피처군 제거: 해당 열을 상수 0으로 (스키마 유지)
@@ -190,7 +191,7 @@ def main() -> None:
 
     # ── 트리 깊이 ────────────────────────────────────────────────────────────
     if "depth" in only:
-        print("\n[증류 깊이] 기준 앙상블(λ=1) → 깊이별 트리")
+        print(f"\n[증류 깊이] 기준 앙상블(λ={args.base_lambda}) → 깊이별 트리")
         results["depth"] = {}
         boosters = fit(X.loc[train_idx], base.loc[train_idx, "J"].to_numpy())
         full_pred, _ = model.ensemble_predict(boosters, X)

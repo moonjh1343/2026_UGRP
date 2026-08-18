@@ -1,0 +1,30 @@
+데이터 적재 중...
+  측정 행 311108개, 실험 1개
+라벨 계산 중 (J = Σw·z_r(QoE) + λ·ServerCost)...
+피처 행렬 구성 중...
+  라우트 25종, 조건 2000개
+분할 중 (시간 + 라우트 그룹)...
+/home/moonjh/Documents/01_UGRP/2026_UGRP/03_Project/training/scripts/train.py:108: UserWarning: 시간 분할이 퇴화했다(경계에 걸친 라우트가 전체) — 그룹(routeKey)-단독 분할로 폴백한다. 이 분할에는 시간 기준 미래 누수 방지가 없다.
+  train_idx, test_idx = split.time_and_group_split(labeled, group_col="routeKey")
+  학습 248886행 / 검증 62222행
+학습 중 (LightGBM × 5시드, alpha=0.3)...
+
+평가 (검증 집합, 조건 단위)...
+
+기준선 대비:
+  fixed-csr      n=400  top1= 21.2%  regret(중앙값)=  0.612  regret(평균)=  0.763  pairwise= 15.6%
+  fixed-ssr      n=400  top1= 15.2%  regret(중앙값)=  0.469  regret(평균)=  0.495  pairwise= 24.8%
+  fixed-stream   n=400  top1= 10.5%  regret(중앙값)=  0.618  regret(평균)=  0.914  pairwise= 16.4%
+  fixed-ssg      n=160  top1= 98.8%  regret(중앙값)=  0.000  regret(평균)=  0.001  pairwise= 39.9%  (실행 불가 조건 240개 제외)
+  fixed-islands  n=400  top1= 13.5%  regret(중앙값)=  0.486  regret(평균)=  0.503  pairwise= 22.3%
+  rule-based     n=400  top1= 24.5%  regret(중앙값)=  0.292  regret(평균)=  0.447  pairwise= 25.5%
+  surrogate      n=400  top1= 74.8%  regret(중앙값)=  0.000  regret(평균)=  0.041  pairwise= 84.1%
+
+평가 리포트 → out/grid-v1-lam0.3/eval_report.json
+
+깊이 5 트리 증류 중...
+  → out/grid-v1-lam0.3/tree.json
+  사용된 피처: ['bundleKB', 'cpuPct', 'deviceTier', 'effectiveTypeIdx', 'fetchDepth', 'interactiveCount', 'mode', 'personalizedRatio', 'rttMs', 'seoWeight']
+  증류 충실도 R² (대 앙상블, 검증 집합) = 0.859
+  distilled-tree n=400  top1= 63.0%  regret(중앙값)=  0.000  regret(평균)=  0.131  pairwise= 51.0%
+  증류 평가 → out/grid-v1-lam0.3/distill_report.json

@@ -1,0 +1,8 @@
+{
+  "n": 400,
+  "top1Rate": 0.7475,
+  "meanRegret": 0.04073999562618647,
+  "medianRegret": 0.0,
+  "p95Regret": 0.2785965891030969,
+  "pairwiseAccuracy": 0.8411184210526316
+}

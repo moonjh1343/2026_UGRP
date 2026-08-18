@@ -5,20 +5,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository status
 
 Every plane below is implemented and tracked — SUT, load generator, measurement workers, CDK
-infrastructure, edge serving plane, training pipeline. What is missing is a **trained model**:
+infrastructure, edge serving plane, training pipeline. All seven stages are done:
 the full-grid collection (`grid-v1`, 20 Fargate shards) ran 2026-08-14 → 08-17 and its data lives
-in S3 + DynamoDB (a local copy is synced to `workers/runs/grid-v1/`, gitignored); the tree the policy actually serves is still the
-`v0-unfitted` placeholder until stage 7 runs on that data.
+in S3 + DynamoDB (a local copy is synced to `workers/runs/grid-v1/`, gitignored); the tree the policy
+serves is now the grid-v1 distilled tree (stage 7 ran 2026-08-18); the serving plane (`edge/`) has not
+been rebuilt/redeployed with it yet.
 
 | 단계 | 상태 |
 |---|---|
 | 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
 | 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
 | 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — **8/17 23:20 완료(10,400/10,400셀·311,108행)**. 8/17 01:26 72h 태스크 타임아웃으로 FAILED(98.9%)된 뒤 high 샤드 15·18을 `infra/scripts/resume-shards.sh`로 재개해 마쳤다. Shards·Orchestration 스택은 철거, Data·Network만 남음. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
-| 7 학습 파이프라인 | 배선 완료, 학습된 모델 없음 (`policy/model/tree.v0.json` = `v0-unfitted`) |
+| 7 학습 파이프라인 | **grid-v1로 학습 완료(2026-08-18)** — `policy/model/tree.v0.json` = `trained-20260817T170754Z`(깊이 5, 잎 32, 앙상블 대비 R² 0.980). 검증(라우트 홀드아웃 400조건): surrogate top-1 76.8%·regret 평균 0.037 vs rule-based 25.0%·1.270; 증류 트리 73.5%·0.072. `check:tree`·`check:policy` 통과. 리포트 `training/reports/grid-v1.*.json` |
 
-Anything under `training/out/` is a smoke-test artifact until stage 6 finishes —
-`eval_report.json` currently scores n=2 conditions. Do not read it as a result.
+`training/out/` is gitignored; the grid-v1 evaluation is checked in as `training/reports/grid-v1.*.json`.
+Note the split warning: with a full factorial every route spans the whole collection window, so the
+time+group split degenerates to a route-group-only split (no temporal leakage guard).
 
 All commands in this section run from `03_Project/apps/benchmark/`:
 

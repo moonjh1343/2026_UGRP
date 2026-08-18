@@ -1,0 +1,67 @@
+데이터 적재 중...
+  행 311108
+  학습 248886 / 검증 62222
+
+[기준선 — 기준 라벨 λ=1]
+  fixed-csr              n= 400 top1= 24.0% regret(평균)= 1.573 pairwise= 14.1% QoE항=+0.301 서버ms=1.969
+  fixed-ssr              n= 400 top1= 13.2% regret(평균)= 1.547 pairwise= 25.8% QoE항=-0.071 서버ms=2.315
+  fixed-stream           n= 400 top1=  8.5% regret(평균)= 2.796 pairwise= 17.5% QoE항=-0.007 서버ms=3.501
+  fixed-ssg              n= 160 top1=100.0% regret(평균)= 0.000 pairwise= 40.0% QoE항=-0.098 서버ms=0.000
+  fixed-islands          n= 400 top1= 14.2% regret(평균)= 1.644 pairwise= 21.5% QoE항=-0.101 서버ms=2.442
+  oracle                 n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.080 서버ms=0.778
+
+[λ 스윕] 각 λ로 라벨·학습, 그 λ의 J로 채점 + 선택 모드의 QoE항/서버비용
+ λ=0.0
+  surrogate(own J)       n= 400 top1= 49.0% regret(평균)= 0.073 pairwise= 76.5% QoE항=-0.158 서버ms=1.974
+  surrogate(base J)      n= 400 top1= 33.0% regret(평균)= 1.118 pairwise= 63.8% QoE항=-0.158 서버ms=1.974
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.232 서버ms=2.052
+ λ=0.01
+  surrogate(own J)       n= 400 top1= 53.2% regret(평균)= 0.071 pairwise= 77.3% QoE항=-0.158 서버ms=1.591
+  surrogate(base J)      n= 400 top1= 47.5% regret(평균)= 0.735 pairwise= 69.0% QoE항=-0.158 서버ms=1.591
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.230 서버ms=1.729
+ λ=0.03
+  surrogate(own J)       n= 400 top1= 57.5% regret(평균)= 0.066 pairwise= 78.3% QoE항=-0.156 서버ms=1.364
+  surrogate(base J)      n= 400 top1= 53.2% regret(평균)= 0.510 pairwise= 72.1% QoE항=-0.156 서버ms=1.364
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.228 서버ms=1.571
+ λ=0.1
+  surrogate(own J)       n= 400 top1= 66.8% regret(평균)= 0.059 pairwise= 82.0% QoE항=-0.134 서버ms=1.092
+  surrogate(base J)      n= 400 top1= 63.0% regret(평균)= 0.260 pairwise= 77.3% QoE항=-0.134 서버ms=1.092
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.208 서버ms=1.240
+ λ=0.3
+  surrogate(own J)       n= 400 top1= 74.8% regret(평균)= 0.041 pairwise= 84.1% QoE항=-0.113 서버ms=0.942
+  surrogate(base J)      n= 400 top1= 70.5% regret(평균)= 0.131 pairwise= 82.4% QoE항=-0.113 서버ms=0.942
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.152 서버ms=0.935
+ λ=1.0
+  surrogate(own J)       n= 400 top1= 76.8% regret(평균)= 0.037 pairwise= 86.9% QoE항=-0.044 서버ms=0.779
+  surrogate(base J)      n= 400 top1= 76.8% regret(평균)= 0.037 pairwise= 86.9% QoE항=-0.044 서버ms=0.779
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.080 서버ms=0.778
+ λ=3.0
+  surrogate(own J)       n= 400 top1= 81.8% regret(평균)= 0.031 pairwise= 91.8% QoE항=-0.041 서버ms=0.774
+  surrogate(base J)      n= 400 top1= 76.2% regret(평균)= 0.035 pairwise= 85.7% QoE항=-0.041 서버ms=0.774
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.074 서버ms=0.774
+ λ=10.0
+  surrogate(own J)       n= 400 top1= 85.0% regret(평균)= 0.031 pairwise= 96.0% QoE항=-0.031 서버ms=0.772
+  surrogate(base J)      n= 400 top1= 76.5% regret(평균)= 0.044 pairwise= 83.8% QoE항=-0.031 서버ms=0.772
+  oracle(own J)          n= 400 top1=100.0% regret(평균)= 0.000 pairwise=100.0% QoE항=-0.066 서버ms=0.773
+
+[절제] 학습 입력만 바꾸고 기준 라벨(λ=1)로 채점
+  full                   n= 400 top1= 76.8% regret(평균)= 0.037 pairwise= 86.9% QoE항=-0.044 서버ms=0.779
+  no-route-zscore        n= 400 top1= 76.0% regret(평균)= 0.039 pairwise= 86.5% QoE항=-0.038 서버ms=0.774
+  drop-device            n= 400 top1= 75.2% regret(평균)= 0.040 pairwise= 84.5% QoE항=-0.040 서버ms=0.777
+  drop-network           n= 400 top1= 76.5% regret(평균)= 0.038 pairwise= 84.9% QoE항=-0.038 서버ms=0.774
+  drop-load              n= 400 top1= 74.2% regret(평균)= 0.050 pairwise= 84.8% QoE항=-0.029 서버ms=0.776
+  drop-route             n= 400 top1= 62.5% regret(평균)= 0.232 pairwise= 61.3% QoE항=-0.007 서버ms=0.937
+  stale-cpu(level-mean)  n= 400 top1= 73.0% regret(평균)= 0.057 pairwise= 84.9% QoE항=-0.022 서버ms=0.776
+  no-server-state        n= 400 top1= 74.2% regret(평균)= 0.050 pairwise= 84.8% QoE항=-0.029 서버ms=0.776
+  alpha=0.0              n= 400 top1= 75.8% regret(평균)= 0.039 pairwise= 86.2% QoE항=-0.040 서버ms=0.777
+  alpha=0.6              n= 400 top1= 75.8% regret(평균)= 0.041 pairwise= 86.7% QoE항=-0.040 서버ms=0.779
+
+[증류 깊이] 기준 앙상블(λ=1) → 깊이별 트리
+  ensemble               n= 400 top1= 76.8% regret(평균)= 0.037 pairwise= 86.9% QoE항=-0.044 서버ms=0.779
+  depth=2 (R²=0.636, 잎 4) n= 400 top1= 34.2% regret(평균)= 1.207 pairwise= 44.7% QoE항=-0.016 서버ms=1.921
+  depth=3 (R²=0.918, 잎 8) n= 400 top1= 74.2% regret(평균)= 0.053 pairwise= 55.0% QoE항=-0.021 서버ms=0.771
+  depth=4 (R²=0.967, 잎 16) n= 400 top1= 72.5% regret(평균)= 0.092 pairwise= 59.2% QoE항=+0.008 서버ms=0.782
+  depth=5 (R²=0.980, 잎 32) n= 400 top1= 73.5% regret(평균)= 0.072 pairwise= 59.7% QoE항=-0.009 서버ms=0.779
+  depth=7 (R²=0.995, 잎 128) n= 400 top1= 73.5% regret(평균)= 0.057 pairwise= 70.9% QoE항=-0.024 서버ms=0.778
+
+→ out/sweep/sweep.json

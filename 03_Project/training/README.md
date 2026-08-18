@@ -18,6 +18,33 @@ python scripts/train.py --runs grid-v1 --distill --out out/grid-v1
 cd ../apps/benchmark && npm run check:tree   # policy/model/에 복사하기 전 게이트
 ```
 
+λ 스윕·절제·증류 깊이(논문 7.4·7.7)는 `scripts/sweep.py`가 한 번에 돌린다 — 데이터는 한 번
+읽고 설정만 바꿔 반복하며, 절제는 항상 기준 라벨(λ=1)로 채점한다. grid-v1 결과는
+`reports/grid-v1.sweep.{json,log}`.
+
+```bash
+python scripts/sweep.py --runs grid-v1 --out out/sweep            # 5시드×200라운드, ~1.5시간
+python scripts/sweep.py --runs grid-v1 --only ablation,depth --base-lambda 0.1 --out out/sweep-lam0.1
+python scripts/sweep.py --runs grid-v1 --seeds 1 --boost-rounds 20 --only lambda,depth   # 빠른 확인
+```
+
+grid-v1에서 나온 것 (`reports/grid-v1.*`):
+
+- **λ 파레토** — λ 0→10에서 선택 모드의 서버 CPU 2.0→0.77ms(−61%), QoE항 −0.16→−0.03.
+  무릎은 λ≈0.3(서버 0.94ms, QoE −0.11). λ=1은 서버비용 쪽으로 기운 선택이다.
+- **λ가 어떤 피처를 쓰게 하는가** — λ=1 채점에서는 라우트 정적 피처 제거가 −14%p이고
+  device/network 제거는 −0.3~−1.6%p뿐(라벨이 모드별로 거의 결정적인 서버비용에 지배됨).
+  λ=0.1 채점에서는 network −8.8%p, device −5.0%p, route −4.8%p로 뒤집힌다.
+  z-정규화 절제도 λ=1에선 −0.8%p, λ=0.1에선 −2.3%p.
+- **깊이 5 증류 예산은 λ=1에서만 충분하다.** λ=1: depth 3에서 top-1 포화(74%), depth 5
+  R² 0.98. λ=0.3: depth 5 → 63%(R² 0.86), 앙상블(74.8%)에 근접하려면 depth 10~12
+  (잎 959~2,724). λ=0.1: depth 5 → 23%, depth 12 → 65.5%(앙상블 66.8%). λ를 낮춰
+  배포하려면 트리 깊이 예산(제안서 5, ~50KB)을 다시 정해야 한다 — 잎 ~1천 개면
+  JSON 수백 KB로, Lambda@Edge 한도(1MB)는 넘지 않지만 추론 <2ms 검사(`check:policy`)를
+  다시 통과해야 한다.
+- λ=0.3 후보 트리는 `reports/candidates/tree.lam0.3.json`(depth 5, R² 0.859)에 두었고
+  `policy/model/`에는 넣지 않았다.
+
 수집이 끝나지 않아도 지금 있는 부분 데이터로 돌아간다 — 표본이 적으면 경고를 내고
 계속 진행한다. 파이프라인이 죽었는지 확인하려고 6단계가 끝나기를 기다릴 필요가 없다.
 

@@ -1,5 +1,5 @@
 {
-  "version": "trained-20260817T170754Z",
+  "version": "trained-20260818T005810Z",
   "distilledFrom": {
     "nSeeds": 5,
     "alpha": 0.3,
@@ -22,11 +22,11 @@
     "bundleKB",
     "cpuPct",
     "deviceTier",
-    "downlinkMbps",
+    "effectiveTypeIdx",
     "fetchDepth",
     "interactiveCount",
     "mode",
-    "payloadKB",
+    "personalizedRatio",
     "rttMs",
     "seoWeight"
   ],
@@ -38,59 +38,167 @@
     "islands": 4
   },
   "root": {
-    "feature": "seoWeight",
-    "threshold": 0.1,
+    "feature": "fetchDepth",
+    "threshold": 1.5,
     "left": {
-      "feature": "mode",
+      "feature": "deviceTier",
       "threshold": 1.5,
       "left": {
         "feature": "mode",
-        "threshold": 0.5,
+        "threshold": 2.5,
         "left": {
-          "feature": "bundleKB",
-          "threshold": 572.21,
+          "feature": "personalizedRatio",
+          "threshold": 0.25,
           "left": {
             "feature": "rttMs",
-            "threshold": 275.0,
+            "threshold": 650.0,
             "left": {
-              "leaf": 2.1574
+              "leaf": 1.4952
             },
             "right": {
-              "leaf": 3.0796
-            }
-          },
-          "right": {
-            "feature": "downlinkMbps",
-            "threshold": 1.0,
-            "left": {
-              "leaf": 4.3641
-            },
-            "right": {
-              "leaf": 3.4521
-            }
-          }
-        },
-        "right": {
-          "feature": "deviceTier",
-          "threshold": 1.5,
-          "left": {
-            "feature": "payloadKB",
-            "threshold": 75.0,
-            "left": {
-              "leaf": 6.4668
-            },
-            "right": {
-              "leaf": 5.9937
+              "leaf": 2.0376
             }
           },
           "right": {
             "feature": "cpuPct",
-            "threshold": 55.6901,
+            "threshold": 52.0672,
             "left": {
-              "leaf": 5.1476
+              "leaf": 0.5359
             },
             "right": {
-              "leaf": 5.7111
+              "leaf": 1.1677
+            }
+          }
+        },
+        "right": {
+          "feature": "bundleKB",
+          "threshold": 569.035,
+          "left": {
+            "feature": "interactiveCount",
+            "threshold": 4.0,
+            "left": {
+              "leaf": 1.1203
+            },
+            "right": {
+              "leaf": 1.6131
+            }
+          },
+          "right": {
+            "feature": "cpuPct",
+            "threshold": 60.2428,
+            "left": {
+              "leaf": 0.5676
+            },
+            "right": {
+              "leaf": 0.8938
+            }
+          }
+        }
+      },
+      "right": {
+        "feature": "mode",
+        "threshold": 2.5,
+        "left": {
+          "feature": "seoWeight",
+          "threshold": 0.45,
+          "left": {
+            "feature": "cpuPct",
+            "threshold": 60.8461,
+            "left": {
+              "leaf": -0.2672
+            },
+            "right": {
+              "leaf": 0.3262
+            }
+          },
+          "right": {
+            "feature": "personalizedRatio",
+            "threshold": 0.05,
+            "left": {
+              "leaf": 0.4567
+            },
+            "right": {
+              "leaf": 0.9999
+            }
+          }
+        },
+        "right": {
+          "feature": "bundleKB",
+          "threshold": 569.035,
+          "left": {
+            "feature": "personalizedRatio",
+            "threshold": 0.05,
+            "left": {
+              "leaf": 0.2448
+            },
+            "right": {
+              "leaf": 0.9195
+            }
+          },
+          "right": {
+            "feature": "deviceTier",
+            "threshold": 2.5,
+            "left": {
+              "leaf": -0.0197
+            },
+            "right": {
+              "leaf": -0.4762
+            }
+          }
+        }
+      }
+    },
+    "right": {
+      "feature": "mode",
+      "threshold": 1.5,
+      "left": {
+        "feature": "deviceTier",
+        "threshold": 1.5,
+        "left": {
+          "feature": "cpuPct",
+          "threshold": 60.3075,
+          "left": {
+            "feature": "rttMs",
+            "threshold": 275.0,
+            "left": {
+              "leaf": 1.7306
+            },
+            "right": {
+              "leaf": 2.2135
+            }
+          },
+          "right": {
+            "feature": "mode",
+            "threshold": 0.5,
+            "left": {
+              "leaf": 2.2686
+            },
+            "right": {
+              "leaf": 2.6406
+            }
+          }
+        },
+        "right": {
+          "feature": "cpuPct",
+          "threshold": 54.4571,
+          "left": {
+            "feature": "rttMs",
+            "threshold": 275.0,
+            "left": {
+              "leaf": 0.7692
+            },
+            "right": {
+              "leaf": 1.3212
+            }
+          },
+          "right": {
+            "feature": "effectiveTypeIdx",
+            "threshold": 1.0,
+            "left": {
+              "leaf": 2.0091
+            },
+            "right": {
+              "leaf": 1.5156
             }
           }
         }
@@ -105,20 +213,20 @@
             "feature": "deviceTier",
             "threshold": 2.5,
             "left": {
-              "leaf": 8.6923
+              "leaf": 2.8397
             },
             "right": {
-              "leaf": 7.8495
+              "leaf": 1.9922
             }
           },
           "right": {
-            "feature": "fetchDepth",
-            "threshold": 2.5,
+            "feature": "deviceTier",
+            "threshold": 1.5,
             "left": {
-              "leaf": 5.1397
+              "leaf": 2.1911
             },
             "right": {
-              "leaf": 5.94
+              "leaf": 1.3468
             }
           }
         },
@@ -129,133 +237,25 @@
             "feature": "cpuPct",
             "threshold": 60.2698,
             "left": {
-              "leaf": 12.3228
+              "leaf": 4.083
             },
             "right": {
-              "leaf": 12.8609
+              "leaf": 4.5955
             }
           },
           "right": {
             "feature": "cpuPct",
             "threshold": 60.9372,
             "left": {
-              "leaf": 11.3914
+              "leaf": 3.1448
             },
             "right": {
-              "leaf": 11.9452
-            }
-          }
-        }
-      }
-    },
-    "right": {
-      "feature": "mode",
-      "threshold": 2.5,
-      "left": {
-        "feature": "seoWeight",
-        "threshold": 0.45,
-        "left": {
-          "feature": "deviceTier",
-          "threshold": 2.5,
-          "left": {
-            "feature": "cpuPct",
-            "threshold": 52.9984,
-            "left": {
-              "leaf": 0.4393
-            },
-            "right": {
-              "leaf": 1.0781
-            }
-          },
-          "right": {
-            "feature": "cpuPct",
-            "threshold": 61.065,
-            "left": {
-              "leaf": -0.2663
-            },
-            "right": {
-              "leaf": 0.3041
-            }
-          }
-        },
-        "right": {
-          "feature": "interactiveCount",
-          "threshold": 4.0,
-          "left": {
-            "feature": "deviceTier",
-            "threshold": 2.5,
-            "left": {
-              "leaf": 2.4587
-            },
-            "right": {
-              "leaf": 1.5963
-            }
-          },
-          "right": {
-            "feature": "deviceTier",
-            "threshold": 1.5,
-            "left": {
-              "leaf": 4.3534
-            },
-            "right": {
-              "leaf": 3.5076
-            }
-          }
-        }
-      },
-      "right": {
-        "feature": "bundleKB",
-        "threshold": 569.035,
-        "left": {
-          "feature": "seoWeight",
-          "threshold": 0.85,
-          "left": {
-            "feature": "deviceTier",
-            "threshold": 1.5,
-            "left": {
-              "leaf": 4.4081
-            },
-            "right": {
-              "leaf": 3.7415
-            }
-          },
-          "right": {
-            "feature": "deviceTier",
-            "threshold": 2.5,
-            "left": {
-              "leaf": 2.0773
-            },
-            "right": {
-              "leaf": 1.2446
-            }
-          }
-        },
-        "right": {
-          "feature": "deviceTier",
-          "threshold": 1.5,
-          "left": {
-            "feature": "cpuPct",
-            "threshold": 60.2428,
-            "left": {
-              "leaf": 0.5733
-            },
-            "right": {
-              "leaf": 0.8884
-            }
-          },
-          "right": {
-            "feature": "deviceTier",
-            "threshold": 2.5,
-            "left": {
-              "leaf": -0.0049
-            },
-            "right": {
-              "leaf": -0.4623
+              "leaf": 3.6932
             }
           }
         }
       }
     }
   },
-  "generatedAt": "2026-08-17T17:07:54.186674+00:00"
+  "generatedAt": "2026-08-18T00:58:10.234364+00:00"
 }

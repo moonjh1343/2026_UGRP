@@ -42,8 +42,12 @@ grid-v1에서 나온 것 (`reports/grid-v1.*`):
   배포하려면 트리 깊이 예산(제안서 5, ~50KB)을 다시 정해야 한다 — 잎 ~1천 개면
   JSON 수백 KB로, Lambda@Edge 한도(1MB)는 넘지 않지만 추론 <2ms 검사(`check:policy`)를
   다시 통과해야 한다.
-- λ=0.3 후보 트리는 `reports/candidates/tree.lam0.3.json`(depth 5, R² 0.859)에 두었고
-  `policy/model/`에는 넣지 않았다.
+- **배포는 λ=0.3 + depth 12로 결정(2026-08-19).** 위 근거대로 λ=0.3이 Pareto 무릎이고
+  λ=1은 정책이 라우트 룩업으로 퇴화하므로, `--distill-depth 12`로 재증류해
+  `policy/model/tree.v0.json`에 넣었다(잎 2,724, 687KB, R² 0.999, top-1 74.2% vs 앙상블
+  74.8%, 추론 p95 0.025ms — `check:tree`·`check:policy` 통과). 리포트는
+  `reports/grid-v1-lam0.3-d12.*.json`. depth-5 후보(`reports/candidates/tree.lam0.3.json`,
+  R² 0.859)는 깊이 예산 비교용으로 남겨 두었다.
 
 수집이 끝나지 않아도 지금 있는 부분 데이터로 돌아간다 — 표본이 적으면 경고를 내고
 계속 진행한다. 파이프라인이 죽었는지 확인하려고 6단계가 끝나기를 기다릴 필요가 없다.

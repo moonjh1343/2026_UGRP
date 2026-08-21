@@ -1,5 +1,7 @@
 # 논문 목차 (안)
 
+초안 본문은 [paper-draft.md](paper-draft.md).
+
 **제목(가안):** 런타임 컨텍스트 적응형 렌더링 모드 선택 — 서로게이트 회귀 기반 정책의 학습과 엣지 서빙
 
 관련 문헌은 [references.md](references.md) 참조. 6·7장 수치는 6단계 본수집 `grid-v1`

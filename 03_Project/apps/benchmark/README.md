@@ -82,7 +82,7 @@ policy/                                결정 계층. 앱을 임포트하지 않
 index.ts       decide() — 가드 체인. 정책은 여기를 통과해야 적용된다
 policies.ts    POLICIES 맵 — 정책 추가는 이 파일 한 줄이다
 surrogate.ts   증류 트리 평가기 — argmin over M(x)
-model/         깊이 5 트리 JSON (현재 v0-unfitted 자리표시자)
+model/         증류 트리 JSON (현재 trained-20260818T163155Z, 깊이 12·687KB)
 features.ts    헤더·쿠키 → Features, 트리 입력 벡터
 routeTable.ts  라우트 정적 특징 룩업 (모듈 초기화 시 1회)
 serverState.ts 서버 상태 30초 캐시 — 절대 await 하지 않는다
@@ -183,9 +183,11 @@ forced → single → bot → circuit → policy → infeasible → margin → s
   전환하지 않고 `stream`으로 떨어졌다. 3단계에서 이 유형의 상위 3개 모드가 노이즈 안에
   있었던 것과 일치한다.
 
-**서러게이트는 미학습 자리표시자(`v0-unfitted`)다.** 4단계가 검증한 것은 결정 계층의
-배선과 비용이지 정책의 품질이 아니다. `policy/model/tree.v0.json`은 5단계 데이터로
-학습·증류한 트리로 교체된다.
+**당시 서러게이트는 미학습 자리표시자(`v0-unfitted`)였다.** 4단계가 검증한 것은 결정
+계층의 배선과 비용이지 정책의 품질이 아니었다. 지금 `policy/model/tree.v0.json`은 6단계
+본수집 `grid-v1`으로 학습·증류한 트리(`trained-20260818T163155Z`, λ=0.3·깊이 12)이고,
+라우트 홀드아웃 400조건에서 top-1 74.2%·regret 0.046이다. 위 표의 결정들은 그 교체 이전
+값이므로 정책 품질의 근거로 읽지 말 것 — 읽어야 할 것은 가드 체인이 도는 방식이다.
 
 ### 5단계 결과 (CPU 4× · 3G Fast · Idle · n=30)
 

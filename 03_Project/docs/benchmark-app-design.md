@@ -501,7 +501,7 @@ policy/
   index.ts        decide() — 가드 체인. 정책은 여기를 통과해야 적용된다
   policies.ts     POLICIES 맵 (fixed-* 5종, rule-based, surrogate)
   surrogate.ts    증류 트리 평가기 — argmin over M(x)
-  model/tree.v0.json   깊이 5 트리
+  model/tree.v0.json   증류 트리 (배포본 trained-20260818T163155Z, 깊이 12)
   features.ts     헤더·쿠키 → Features, 그리고 트리 입력 벡터
   routeTable.ts   라우트 정적 특징 룩업 (모듈 초기화 시 1회)
   serverState.ts  서버 상태 30초 캐시 — 절대 await 하지 않는다
@@ -661,7 +661,9 @@ npm run analyze:routes    →  policy/bundles.generated.json   (→ npm run buil
 ### 4단계 결과
 
 추론 오버헤드는 예산(2ms)의 1% 수준이다. 서러게이트가 p95 0.022ms로 가장 비싸고,
-그마저 후보 4~5개를 전부 채점한 값이다 — 깊이 5 트리 평가는 실질적으로 공짜다.
+그마저 후보 4~5개를 전부 채점한 값이다 — 트리 평가는 실질적으로 공짜다. 이 수치는
+`v0-unfitted` 자리표시자 기준이었고, 학습된 깊이 12 트리로 교체한 뒤에도 p95 0.025ms로
+같은 자릿수다(잎이 늘어도 한 번의 결정에 거치는 비교는 깊이만큼뿐이다).
 **병목은 추론이 아니라 피처 수집이었을 것**이므로, 라우트 특징을 모듈 초기화 시 한 번만
 룩업 테이블로 만든 것(§10)이 이 수치를 만든 이유다.
 
@@ -683,8 +685,11 @@ npm run analyze:routes    →  policy/bundles.generated.json   (→ npm run buil
   CSR은 모든 유형에서 명확한 열위였다. 즉 이 휴리스틱의 약점은 임계값이 아니라
   **첫 요청에 정보가 없다는 것**이고, 학습 모델이 이겨야 할 지점도 거기다.
 
-단, 서러게이트는 **미학습 자리표시자**(`v0-unfitted`)다. 4단계가 검증한 것은 결정 계층의
-배선과 비용이지 정책의 품질이 아니다.
+단, **이 표를 냈을 당시** 서러게이트는 미학습 자리표시자(`v0-unfitted`)였다. 4단계가
+검증한 것은 결정 계층의 배선과 비용이지 정책의 품질이 아니다. 학습된 정책의 품질은 7단계
+결과에 있다 — `grid-v1`으로 학습·증류한 `trained-20260818T163155Z`(λ=0.3·깊이 12)가
+라우트 홀드아웃 400조건에서 top-1 74.2%이고, 위에서 지적한 `rule-based`의 콜드 스타트
+약점(24.5%)을 실제로 이긴다.
 
 ### 5단계 결과
 

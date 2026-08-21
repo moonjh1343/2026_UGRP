@@ -5,7 +5,8 @@
 **제목(가안):** 런타임 컨텍스트 적응형 렌더링 모드 선택 — 서로게이트 회귀 기반 정책의 학습과 엣지 서빙
 
 관련 문헌은 [references.md](references.md) 참조. 6·7장 수치는 6단계 본수집 `grid-v1`
-(2026-08-14 시작, 8/16 기준 97%, 완료 후 학습 예정 — 아직 `v0-unfitted`)의 결과로 채운다.
+(2026-08-14 → 08-17 완료, 10,400셀·311,108행)과 그것으로 학습·배포한 트리
+(`trained-20260818T163155Z`, λ=0.3·깊이 12)의 결과로 채웠다 — 초안에 이미 반영되어 있다.
 5장에 적을 실험 조건 중 제안서와 달라진 것: 부하 축 30/50/70% CPU(2 vCPU SUT 천장 ~71%,
 `load/README.md`), high 수준의 실측 63.8–68.9%, high 셀의 n<30(비콘 미도착), 랩 경로에
 ALB/CloudFront 없음(`infra/README.md`).
@@ -54,7 +55,7 @@ ALB/CloudFront 없음(`infra/README.md`).
 - 6.1 특징 벡터와 train-serve 정합성 (features.ts ↔ config.py)
 - 6.2 레이블링: 웹 바이탈 QoE 비용, 서버 비용 측정 범위와 한계 (C_serve/C_store 미계측)
 - 6.3 LightGBM 서로게이트 + pairwise 목적 함수
-- 6.4 depth-5 트리 증류와 서빙 게이트(check:tree)
+- 6.4 트리 증류와 서빙 게이트(check:tree) — 증류 깊이는 λ에 딸린 값이다(배포본 depth 12)
 - 6.5 시간·라우트 그룹 분할, 누수 방지
 
 ## 7. 평가

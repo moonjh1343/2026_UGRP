@@ -63,7 +63,7 @@ ugrp_train/
   split.py      시간 + 라우트 그룹 분할, GroupKFold
   model.py      LightGBM(MSE+pairwise 커스텀 목적함수) 학습, 앙상블, 기준선
   evaluate.py   오라클 regret · top-1 · pairwise accuracy (조건 단위)
-  distill.py    앙상블 → 깊이 5 트리 → policy/model/*.json 스키마로 내보내기
+  distill.py    앙상블 → 단일 트리(깊이는 --distill-depth) → policy/model/*.json 스키마로 내보내기
 scripts/
   fetch_routes.py   라우트 스냅샷 생성 (앱에 GET 1회 + bundles.generated.json 읽기)
   train.py          전체 파이프라인 CLI

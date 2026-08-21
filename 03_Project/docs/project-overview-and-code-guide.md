@@ -3,6 +3,7 @@
 처음 이 저장소를 보는 사람이 "무엇을 하는 연구인지"와 "코드가 어떻게 그 연구를 구현하는지"를
 한 번에 파악할 수 있도록 정리한 문서다. 권위 문서는 `adaptive-rendering-research-proposal.md`,
 SUT 상세는 `benchmark-app-design.md`이며, 이 문서는 그 둘로 들어가기 전의 지도 역할을 한다.
+연구 결과 서술은 `paper-draft.md`(초안 본문)와 `paper-outline.md`(장 구성)에 있다.
 
 ---
 
@@ -55,36 +56,50 @@ mode*(x, r) = argmin over m ∈ M(r) of Ĵ(x, m)
 모드 자체가 서버 부하를 바꾸는데 부하가 특징이기도 하다) 생성기가 목표 CPU에 맞춘 VU 수로
 부하를 고정하고, 측정 요청 하나가 그 위에 올라탄다.
 
-### 현재 상태 (2026-08-17 기준)
+### 현재 상태 (2026-08-21 기준)
 
-1~5단계와 7단계 **코드는 전부 완성**되어 각자의 검증 게이트를 통과했고, **6단계 본수집이
-끝났다**:
+**7단계까지 전부 끝났다.** 남은 것은 서빙 평면 재배포와 논문 마감이다.
 
-- **6단계 본수집 `grid-v1` 완료** — 20 Fargate 샤드, 10,400셀 × 30 reps → 10,400셀·
+- **6단계 본수집 `grid-v1` 완료(8/17)** — 20 Fargate 샤드, 10,400셀 × 30 reps → 10,400셀·
   311,108행. 2026-08-14 01:26 시작, 8/17 01:26에 72h 태스크 타임아웃으로 high 샤드 2개가
   잘려(98.9%) `infra/scripts/resume-shards.sh`로 재개, 8/17 23:20 완료. 데이터는 S3
   `ugrp-grid-v1-data-results25575328-fm3me6shxv6z/experiment=grid-v1/`(워커 로그는
-  같은 버킷 `logs/grid-v1/`), 로컬 사본 `workers/runs/grid-v1/`. Shards·Orchestration
-  스택은 철거했고 Data·Network만 남았다. 이전 파일럿(`workers/runs/pilot-low-idle/`,
-  slice-b2)은 SSG 캐시 축이 revalidate no-op 버그로 의심 대상이라 학습에 쓰지 않는다.
+  같은 버킷 `logs/grid-v1/`), 로컬 사본 `workers/runs/grid-v1/`(gitignore). Shards·
+  Orchestration 스택은 철거했고 Data·Network만 남았다. 이전 파일럿
+  (`workers/runs/pilot-low-idle/`, slice-b2)은 SSG 캐시 축이 revalidate no-op 버그로
+  의심 대상이라 학습에 쓰지 않는다.
 - 데이터 검증 결과: 캐시 축 요구=관측 100% 일치, 지표 결측 0, rep 중복 0. high 셀 328개가
   n<30(최소 21). 부하 실측 CPU 중앙값 idle 0.1 / low 29.3 / mid 48.2 / high 66.0%.
   `TTFB`에는 에뮬레이션 RTT가 안 들어 있다(Chromium이 latency를 본문 전달에만 적용) —
   `training/README.md` 알려진 한계.
 - 부하 축은 제안서의 30/65/90이 아니라 **30/50/70% CPU**다 — 2 vCPU SUT의 천장이 ~71%라
   90%는 도달 불가(`load/README.md`). high 셀은 실측 63.8–68.9%가 기록된다.
-- 정책이 서빙하는 트리는 아직 `v0-unfitted` 플레이스홀더. `training/out/`의 평가 리포트는
-  n=2 조건짜리 스모크 테스트 산출물이다 — 결과로 읽지 말 것.
+- **7단계 학습·증류·배포 완료(8/18~19)** — `policy/model/tree.v0.json`은 이제
+  `trained-20260818T163155Z`(grid-v1 311,108행 학습, 잎 2,724, 687KB)다. λ 스윕의 Pareto
+  무릎이 **λ=0.3**이고(λ≥1이면 정책이 라우트 룩업으로 퇴화), λ<1은 문맥 상호작용 때문에
+  depth 5로 부족해 **depth 12**로 확장했다(`--distill-depth`). 라우트 홀드아웃 400조건:
+  앙상블 top-1 74.8%·regret 0.041, 증류 트리 74.2%·0.046, 앙상블 대비 R² 0.999,
+  추론 p95 0.025ms(예산 2ms). `check:tree`·`check:policy` 통과. 근거는
+  `training/reports/grid-v1.sweep*.json`·`grid-v1.depth-*.json`, 배포본 리포트는
+  `grid-v1-lam0.3-d12.{eval,distill}_report.json`.
+- **라벨의 ServerCost는 아직 부분 미계측이다.** `C_serve`·`C_store`가 0이라(근사가 아니라
+  계측 부재) SSG의 요청당 서버 비용이 정확히 0으로 잡힌다 — 일반형이 막으려 했던 SSG 편향이
+  일부 되돌아와 있다. `fixed-ssg` 베이스라인이 SSG 가능 160조건에서 top-1 98.8%인 것도 같은
+  이유로 읽어야 한다(`training/README.md`).
 - 비용: 제안서 추정 $282–343 → 실측 약 **$450**(실패한 시도 5회의 유휴 과금 + high 샤드
   꼬리 1.5일 + 재개 9h). 예산 ₩300,000 + 크레딧 $160을 ~$70 넘겼다.
 
 ### 다음 단계
 
 1. ~~잔여 서비스 0 → `Orchestration`·`Shards` 스택 삭제~~ 완료(8/17).
-2. ~~`aws s3 sync`로 `workers/runs/grid-v1/`에 받고 데이터 검증~~ 완료(8/17, 위 결과).
-3. `training/`에서 `--runs grid-v1 --distill` → `npm run check:tree` → `policy/model/`
-   교체 → 서빙 평면 배포(`edge/README.md`).
-4. 논문 6·7장 수치 채우기(`docs/paper-outline.md`).
+2. ~~`aws s3 sync`로 `workers/runs/grid-v1/`에 받고 데이터 검증~~ 완료(8/17).
+3. ~~`--runs grid-v1 --distill` → `check:tree` → `policy/model/` 교체~~ 완료(8/19).
+4. **서빙 평면 재배포** — grid-v1 트리로 `edge/` 번들을 다시 빌드하고
+   `ServingOrigin` → `Serving` 순서로 배포(`edge/README.md`). CloudFront 캐시 적중률
+   실측이 여기에 걸려 있다.
+5. **논문 마감** — 초안은 `paper-draft.md`(v0.1, grid-v1 수치 반영). 남은 `[TODO]`는
+   OPE(§7.5), 필드 무작위화 배포(§5.6), Device Farm 실기기 서브셋, CloudFront 적중률,
+   비용 부록, 그림 2점, 참고문헌 서식.
 
 ---
 
@@ -135,11 +150,12 @@ hydrate), `shell.tsx`(공통 골격). 페이지 파일은 얇고 모드 차이�
 
 - `features.ts` — 요청 헤더 → 24차원 특징 벡터. `FEATURE_ORDER`가 training의 `config.py`와
   **수동 동기화**되는 지점.
-- `surrogate.ts` — depth-5 트리 평가기. `x[cur.feature] ?? 0`이라 특징 이름이 어긋나도
+- `surrogate.ts` — 트리 평가기(깊이 무관). `x[cur.feature] ?? 0`이라 특징 이름이 어긋나도
   에러 없이 0으로 읽는다 — 대표적인 조용한 실패 지점.
 - `policies.ts` — `decide()`: 하드핀 → 실행 가능성 검사(불가 모드면
   `x-decision-reason: infeasible` 기록) → 트리 argmin → 마진 τ 검사.
-- `model/tree.v0.json` — 서빙 중인 트리 (현재 `v0-unfitted`).
+- `model/tree.v0.json` — 서빙 중인 트리. 현재 `trained-20260818T163155Z`
+  (grid-v1·λ=0.3·depth 12, 잎 2,724, 687KB).
 
 **`scripts/` — 검증 게이트.** 각 스크립트가 구현 단계 하나를 지킨다: `check-dom-equivalence`
 (5모드 DOM 동일), `check-join`(서버↔비콘 조인), `check-type-divergence`(유형별 모드 우열이
@@ -220,10 +236,13 @@ hydrate), `shell.tsx`(공통 골격). 페이지 파일은 얇고 모드 차이�
    축에 매핑.
 3. `labels.py` — QoE 가중합(LCP .4 / INP .3 / TBT .2 / TTFB .1) + ServerCost,
    **라우트별 z-score 정규화**.
-4. `split.py` — 시간 × 라우트 그룹 이중 분할 (세션 누수 방지).
+4. `split.py` — 시간 × 라우트 그룹 이중 분할 (세션 누수 방지). **full-factorial에서는
+   모든 라우트가 수집 창 전체에 걸쳐 시간 분할이 퇴화**하고 그룹-단독 분할로 떨어진다 —
+   경고를 띄우지만 실패시키지는 않는다. grid-v1이 그 경우다.
 5. `model.py` — LightGBM + 커스텀 pairwise 목적함수 (같은 조건 내 모드 간 순위가 진짜
    목표라서).
-6. `distill.py` — 앙상블 → depth-5 트리 JSON (~50KB).
+6. `distill.py` — 앙상블 → 단일 트리 JSON. 깊이는 `--distill-depth` 인자이고 제안서의
+   depth 5는 λ=1 기준값이었다 — 배포본은 depth 12(687KB, 앙상블 대비 R² 0.999).
 7. `evaluate.py` — regret, 모드 일치율 등 평가 리포트.
 8. `config.py` — **JS 쪽 3개 테이블의 수동 복사본** (grid.mjs 조건, features.ts 순서,
    모드 인덱스). 드리프트 감지는 `check:tree`의 몫.
@@ -260,6 +279,9 @@ hydrate), `shell.tsx`(공통 골격). 페이지 파일은 얇고 모드 차이�
 4. **짧은 버스트로 부하 캘리브레이션.** 고정 VU는 동시성을 고정하지 CPU를 고정하지 않는다 —
    지속 CPU가 캘리브레이션보다 12~16%p 낮게 앉고, 부하 축이 서버가 겪지 않은 CPU로
    라벨링된다. `calibrateRemote`가 지속 값을 기록하는 이유다.
+5. **미계측 비용 항이 0으로 학습된다.** `C_serve`·`C_store`가 0이라 SSG의 ServerCost가
+   0으로 잡히고, 모델은 그것을 "SSG는 공짜"로 배운다. 라벨은 정상적으로 계산되고 평가
+   리포트도 초록이다 — 편향은 숫자 안에만 있다.
 
 수집이 도는 동안 같은 머신에서 CPU 무거운 작업(빌드·학습·typecheck)을 돌리면 idle 셀의
 전제가 깨진다. 생기면 행 삭제가 아니라 `quarantine.mjs`로 창을 표시한다.

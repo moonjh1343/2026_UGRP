@@ -81,6 +81,9 @@ pip install -r requirements.txt
 python scripts/fetch_routes.py     # route snapshot — needs the app server up, doesn't disturb it
 python scripts/train.py --distill  # load collected runs → label → train → evaluate → distill
 python scripts/train.py --runs pilot-low-idle --distill --out out/pilot   # 한 실험만
+# 배포 중인 트리(trained-20260818T163155Z)를 그대로 재현하는 인자
+python scripts/train.py --runs grid-v1 --lambda 0.3 --distill --distill-depth 12 --out out/lam0.3-d12
+python scripts/sweep.py --runs grid-v1 --out out/sweep   # λ 스윕·특징 절제·증류 깊이 (→ reports/)
 ```
 
 It runs on partial data on purpose — too few samples produces a warning, not a failure, so you
@@ -171,7 +174,7 @@ These were argued for in the proposal. Do not silently re-litigate them; if you 
 - **Labels are z-score normalized per route.** Skipping this makes the model learn "heavy page = bad" and destroys the between-mode signal that is the actual target.
 - **Full-factorial lab collection to sidestep the counterfactual problem.** Lab conditions are reproducible, so every mode is measured under the same condition vector — a request is not limited to one observed treatment. Grid: device tier (4) × network (5) × server load (4) = 80 conditions, times the per-route feasible modes `Σ|M(r)| = 110` plus the SSG cache-state axis (10 SSG routes × 2 extra states) — `80 × (110 + 20) = 10,400` cells, 30 reps each. Mode is not a free 5-way factor: `M(r)` excludes SSG on dashboard/form/personalized, and a policy that folds an infeasible mode into a feasible one silently is unusable as a baseline, so `decide()` records the fallback as `x-decision-reason: infeasible` instead. Field randomization (5–10% of traffic, propensity logged) supplies unbiased data for off-policy evaluation.
 - **Background server load must be exogenous.** The render mode itself changes server load, which is also a feature. Load is pinned by a k6 generator with autoscaling disabled and `desiredCount` fixed; a single measurement request rides on top.
-- **In-process edge inference only.** A depth-5 tree distilled from the LightGBM ensemble is evaluated inside Lambda@Edge (~50KB JSON). A SageMaker endpoint in the request path would add tens of ms and cancel out the improvement it is measuring. Target overhead: TTFB increase < 2 ms.
+- **In-process edge inference only.** A tree distilled from the LightGBM ensemble is evaluated inside Lambda@Edge (proposal: depth 5, ~50KB; **deployed: depth 12, 687KB** — at λ=0.3 depth 5 cannot express the context interactions, see stage 7 above). A SageMaker endpoint in the request path would add tens of ms and cancel out the improvement it is measuring. Target overhead: TTFB increase < 2 ms.
 - **Server-state features are intentionally stale (~30s).** Load doesn't swing per-second, and a DynamoDB round-trip per request costs more than the freshness is worth.
 - **ML never decides SEO or correctness.** Crawler UAs and payment/auth routes are hard-pinned to SSR. A circuit breaker reverts all traffic to the default mode (Streaming SSR) on hydration-error or 5xx spikes.
 
@@ -236,7 +239,7 @@ Non-ASCII directory names — quote paths in shell commands.
 - `00_Main/`, `01_연구 계획서/` — proposal submissions (PDF/DOCX)
 - `02_참고 논문/` — reference papers on CSR/SSR performance
 - `99_기타/` — past UGRP award reports, admin documents
-- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (thesis outline; chapters 6–7 wait on stage 6)
+- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (outline), `paper-draft.md` (초안 v0.1, grid-v1 수치 반영)
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.
@@ -246,5 +249,7 @@ Non-ASCII directory names — quote paths in shell commands.
 - `03_Project/workers/runs/` — local pilot data (gitignored). Cloud runs land in S3 (`experiment=/dt=/shard=/<cell>.jsonl`).
 - `03_Project/training/` — Python training pipeline (stage 7). `ugrp_train/` is the package,
   `scripts/` the CLI entry points. `data/` and `out/` are gitignored (generated).
+
+**This file is CRLF**, unlike the rest of the tree (`.gitattributes` pins only `*.sh`/`Dockerfile` to LF, because a `\r` in a shebang is a "bad interpreter" crash). Edit CLAUDE.md in place — a whole-file rewrite normalizes it to LF and turns a two-line change into a 250-line diff.
 
 `.gitignore` excludes all PDF/DOCX/PPTX/HWP/XLSX and all of `99_기타/` — that directory holds invoices and receipts. The repo is private, but keep binaries and personal documents out of it regardless.

@@ -1,0 +1,555 @@
+{
+ "runs": [
+  "grid-v1"
+ ],
+ "nConditions": 2000,
+ "crosstab": {
+  "overallSharePct": {
+   "islands": 30.6,
+   "ssr": 27.8,
+   "stream": 15.6,
+   "ssg": 13.3,
+   "csr": 12.6
+  },
+  "device": {
+   "content|flagship": {
+    "csr": 29.0,
+    "ssr": 18.0,
+    "stream": 10.0,
+    "ssg": 25.0,
+    "islands": 18.0
+   },
+   "content|low": {
+    "csr": 22.0,
+    "ssr": 24.0,
+    "stream": 11.0,
+    "ssg": 28.0,
+    "islands": 15.0
+   },
+   "content|mid": {
+    "csr": 15.0,
+    "ssr": 18.0,
+    "stream": 18.0,
+    "ssg": 35.0,
+    "islands": 14.0
+   },
+   "content|very-low": {
+    "csr": 9.0,
+    "ssr": 18.0,
+    "stream": 15.0,
+    "ssg": 34.0,
+    "islands": 24.0
+   },
+   "dashboard|flagship": {
+    "csr": 6.0,
+    "ssr": 42.0,
+    "stream": 8.0,
+    "ssg": 0.0,
+    "islands": 44.0
+   },
+   "dashboard|low": {
+    "csr": 3.0,
+    "ssr": 49.0,
+    "stream": 9.0,
+    "ssg": 0.0,
+    "islands": 39.0
+   },
+   "dashboard|mid": {
+    "csr": 5.0,
+    "ssr": 39.0,
+    "stream": 10.0,
+    "ssg": 0.0,
+    "islands": 46.0
+   },
+   "dashboard|very-low": {
+    "csr": 18.0,
+    "ssr": 21.0,
+    "stream": 11.0,
+    "ssg": 0.0,
+    "islands": 50.0
+   },
+   "form|flagship": {
+    "csr": 13.0,
+    "ssr": 21.0,
+    "stream": 29.0,
+    "ssg": 0.0,
+    "islands": 37.0
+   },
+   "form|low": {
+    "csr": 12.0,
+    "ssr": 27.0,
+    "stream": 31.0,
+    "ssg": 0.0,
+    "islands": 30.0
+   },
+   "form|mid": {
+    "csr": 41.0,
+    "ssr": 24.0,
+    "stream": 17.0,
+    "ssg": 0.0,
+    "islands": 18.0
+   },
+   "form|very-low": {
+    "csr": 18.0,
+    "ssr": 25.0,
+    "stream": 34.0,
+    "ssg": 0.0,
+    "islands": 23.0
+   },
+   "list|flagship": {
+    "csr": 0.0,
+    "ssr": 34.0,
+    "stream": 7.0,
+    "ssg": 45.0,
+    "islands": 14.0
+   },
+   "list|low": {
+    "csr": 6.0,
+    "ssr": 21.0,
+    "stream": 8.0,
+    "ssg": 39.0,
+    "islands": 26.0
+   },
+   "list|mid": {
+    "csr": 2.0,
+    "ssr": 24.0,
+    "stream": 5.0,
+    "ssg": 48.0,
+    "islands": 21.0
+   },
+   "list|very-low": {
+    "csr": 22.0,
+    "ssr": 10.0,
+    "stream": 9.0,
+    "ssg": 12.0,
+    "islands": 47.0
+   },
+   "personalized|flagship": {
+    "csr": 5.0,
+    "ssr": 44.0,
+    "stream": 17.0,
+    "ssg": 0.0,
+    "islands": 34.0
+   },
+   "personalized|low": {
+    "csr": 11.0,
+    "ssr": 36.0,
+    "stream": 19.0,
+    "ssg": 0.0,
+    "islands": 34.0
+   },
+   "personalized|mid": {
+    "csr": 8.0,
+    "ssr": 28.0,
+    "stream": 22.0,
+    "ssg": 0.0,
+    "islands": 42.0
+   },
+   "personalized|very-low": {
+    "csr": 8.0,
+    "ssr": 32.0,
+    "stream": 23.0,
+    "ssg": 0.0,
+    "islands": 37.0
+   }
+  },
+  "network": {
+   "content|3g-fast": {
+    "csr": 10.0,
+    "ssr": 18.8,
+    "stream": 8.8,
+    "ssg": 38.8,
+    "islands": 23.8
+   },
+   "content|3g-slow": {
+    "csr": 0.0,
+    "ssr": 25.0,
+    "stream": 28.7,
+    "ssg": 26.2,
+    "islands": 20.0
+   },
+   "content|5g": {
+    "csr": 40.0,
+    "ssr": 8.8,
+    "stream": 5.0,
+    "ssg": 33.8,
+    "islands": 12.5
+   },
+   "content|lte": {
+    "csr": 43.8,
+    "ssr": 15.0,
+    "stream": 5.0,
+    "ssg": 31.2,
+    "islands": 5.0
+   },
+   "content|offline-first": {
+    "csr": 0.0,
+    "ssr": 30.0,
+    "stream": 20.0,
+    "ssg": 22.5,
+    "islands": 27.5
+   },
+   "dashboard|3g-fast": {
+    "csr": 1.2,
+    "ssr": 42.5,
+    "stream": 8.8,
+    "ssg": 0.0,
+    "islands": 47.5
+   },
+   "dashboard|3g-slow": {
+    "csr": 0.0,
+    "ssr": 42.5,
+    "stream": 3.8,
+    "ssg": 0.0,
+    "islands": 53.8
+   },
+   "dashboard|5g": {
+    "csr": 20.0,
+    "ssr": 25.0,
+    "stream": 15.0,
+    "ssg": 0.0,
+    "islands": 40.0
+   },
+   "dashboard|lte": {
+    "csr": 18.8,
+    "ssr": 32.5,
+    "stream": 15.0,
+    "ssg": 0.0,
+    "islands": 33.8
+   },
+   "dashboard|offline-first": {
+    "csr": 0.0,
+    "ssr": 46.2,
+    "stream": 5.0,
+    "ssg": 0.0,
+    "islands": 48.8
+   },
+   "form|3g-fast": {
+    "csr": 26.2,
+    "ssr": 22.5,
+    "stream": 25.0,
+    "ssg": 0.0,
+    "islands": 26.2
+   },
+   "form|3g-slow": {
+    "csr": 0.0,
+    "ssr": 27.5,
+    "stream": 41.2,
+    "ssg": 0.0,
+    "islands": 31.2
+   },
+   "form|5g": {
+    "csr": 35.0,
+    "ssr": 27.5,
+    "stream": 17.5,
+    "ssg": 0.0,
+    "islands": 20.0
+   },
+   "form|lte": {
+    "csr": 43.8,
+    "ssr": 17.5,
+    "stream": 21.2,
+    "ssg": 0.0,
+    "islands": 17.5
+   },
+   "form|offline-first": {
+    "csr": 0.0,
+    "ssr": 26.2,
+    "stream": 33.8,
+    "ssg": 0.0,
+    "islands": 40.0
+   },
+   "list|3g-fast": {
+    "csr": 7.5,
+    "ssr": 21.2,
+    "stream": 11.2,
+    "ssg": 35.0,
+    "islands": 25.0
+   },
+   "list|3g-slow": {
+    "csr": 0.0,
+    "ssr": 22.5,
+    "stream": 7.5,
+    "ssg": 23.8,
+    "islands": 46.2
+   },
+   "list|5g": {
+    "csr": 15.0,
+    "ssr": 13.8,
+    "stream": 0.0,
+    "ssg": 52.5,
+    "islands": 18.8
+   },
+   "list|lte": {
+    "csr": 15.0,
+    "ssr": 17.5,
+    "stream": 7.5,
+    "ssg": 43.8,
+    "islands": 16.2
+   },
+   "list|offline-first": {
+    "csr": 0.0,
+    "ssr": 36.2,
+    "stream": 10.0,
+    "ssg": 25.0,
+    "islands": 28.7
+   },
+   "personalized|3g-fast": {
+    "csr": 2.5,
+    "ssr": 40.0,
+    "stream": 22.5,
+    "ssg": 0.0,
+    "islands": 35.0
+   },
+   "personalized|3g-slow": {
+    "csr": 0.0,
+    "ssr": 36.2,
+    "stream": 16.2,
+    "ssg": 0.0,
+    "islands": 47.5
+   },
+   "personalized|5g": {
+    "csr": 26.2,
+    "ssr": 32.5,
+    "stream": 16.2,
+    "ssg": 0.0,
+    "islands": 25.0
+   },
+   "personalized|lte": {
+    "csr": 11.2,
+    "ssr": 30.0,
+    "stream": 30.0,
+    "ssg": 0.0,
+    "islands": 28.7
+   },
+   "personalized|offline-first": {
+    "csr": 0.0,
+    "ssr": 36.2,
+    "stream": 16.2,
+    "ssg": 0.0,
+    "islands": 47.5
+   }
+  },
+  "load": {
+   "content|high": {
+    "csr": 6.0,
+    "ssr": 14.0,
+    "stream": 6.0,
+    "ssg": 67.0,
+    "islands": 7.0
+   },
+   "content|idle": {
+    "csr": 25.0,
+    "ssr": 28.0,
+    "stream": 15.0,
+    "ssg": 8.0,
+    "islands": 24.0
+   },
+   "content|low": {
+    "csr": 23.0,
+    "ssr": 21.0,
+    "stream": 19.0,
+    "ssg": 18.0,
+    "islands": 19.0
+   },
+   "content|mid": {
+    "csr": 21.0,
+    "ssr": 15.0,
+    "stream": 14.0,
+    "ssg": 29.0,
+    "islands": 21.0
+   },
+   "dashboard|high": {
+    "csr": 13.0,
+    "ssr": 32.0,
+    "stream": 10.0,
+    "ssg": 0.0,
+    "islands": 45.0
+   },
+   "dashboard|idle": {
+    "csr": 6.0,
+    "ssr": 38.0,
+    "stream": 5.0,
+    "ssg": 0.0,
+    "islands": 51.0
+   },
+   "dashboard|low": {
+    "csr": 6.0,
+    "ssr": 39.0,
+    "stream": 12.0,
+    "ssg": 0.0,
+    "islands": 43.0
+   },
+   "dashboard|mid": {
+    "csr": 7.0,
+    "ssr": 42.0,
+    "stream": 11.0,
+    "ssg": 0.0,
+    "islands": 40.0
+   },
+   "form|high": {
+    "csr": 24.0,
+    "ssr": 19.0,
+    "stream": 26.0,
+    "ssg": 0.0,
+    "islands": 31.0
+   },
+   "form|idle": {
+    "csr": 26.0,
+    "ssr": 25.0,
+    "stream": 30.0,
+    "ssg": 0.0,
+    "islands": 19.0
+   },
+   "form|low": {
+    "csr": 13.0,
+    "ssr": 25.0,
+    "stream": 29.0,
+    "ssg": 0.0,
+    "islands": 33.0
+   },
+   "form|mid": {
+    "csr": 21.0,
+    "ssr": 28.0,
+    "stream": 26.0,
+    "ssg": 0.0,
+    "islands": 25.0
+   },
+   "list|high": {
+    "csr": 8.0,
+    "ssr": 5.0,
+    "stream": 3.0,
+    "ssg": 57.0,
+    "islands": 27.0
+   },
+   "list|idle": {
+    "csr": 9.0,
+    "ssr": 43.0,
+    "stream": 6.0,
+    "ssg": 11.0,
+    "islands": 31.0
+   },
+   "list|low": {
+    "csr": 6.0,
+    "ssr": 23.0,
+    "stream": 13.0,
+    "ssg": 32.0,
+    "islands": 26.0
+   },
+   "list|mid": {
+    "csr": 7.0,
+    "ssr": 18.0,
+    "stream": 7.0,
+    "ssg": 44.0,
+    "islands": 24.0
+   },
+   "personalized|high": {
+    "csr": 16.0,
+    "ssr": 33.0,
+    "stream": 14.0,
+    "ssg": 0.0,
+    "islands": 37.0
+   },
+   "personalized|idle": {
+    "csr": 0.0,
+    "ssr": 35.0,
+    "stream": 24.0,
+    "ssg": 0.0,
+    "islands": 41.0
+   },
+   "personalized|low": {
+    "csr": 8.0,
+    "ssr": 38.0,
+    "stream": 22.0,
+    "ssg": 0.0,
+    "islands": 32.0
+   },
+   "personalized|mid": {
+    "csr": 8.0,
+    "ssr": 34.0,
+    "stream": 21.0,
+    "ssg": 0.0,
+    "islands": 37.0
+   }
+  }
+ },
+ "marginLambda0.3": {
+  "n": 2000,
+  "median": 0.488,
+  "p25": 0.131,
+  "shareBelow0.1Pct": 21.8
+ },
+ "qoeMedianExamples": {
+  "content_LCP_by_network": {
+   "csr|3g-fast": 2404.0,
+   "csr|3g-slow": 7236.0,
+   "csr|5g": 960.0,
+   "csr|lte": 994.0,
+   "csr|offline-first": 11876.0,
+   "islands|3g-fast": 528.0,
+   "islands|3g-slow": 1184.0,
+   "islands|5g": 644.0,
+   "islands|lte": 548.0,
+   "islands|offline-first": 2276.0,
+   "ssg|3g-fast": 492.0,
+   "ssg|3g-slow": 1172.0,
+   "ssg|5g": 240.0,
+   "ssg|lte": 296.0,
+   "ssg|offline-first": 2280.0,
+   "ssr|3g-fast": 540.0,
+   "ssr|3g-slow": 1184.0,
+   "ssr|5g": 582.0,
+   "ssr|lte": 612.0,
+   "ssr|offline-first": 2272.0,
+   "stream|3g-fast": 532.0,
+   "stream|3g-slow": 1224.0,
+   "stream|5g": 688.0,
+   "stream|lte": 610.0,
+   "stream|offline-first": 2280.0
+  },
+  "list_TBT_by_device": {
+   "csr|flagship": 6.0,
+   "csr|low": 441.0,
+   "csr|mid": 143.0,
+   "csr|very-low": 772.0,
+   "islands|flagship": 6.0,
+   "islands|low": 317.0,
+   "islands|mid": 106.0,
+   "islands|very-low": 552.0,
+   "ssg|flagship": 5.0,
+   "ssg|low": 320.0,
+   "ssg|mid": 103.0,
+   "ssg|very-low": 674.0,
+   "ssr|flagship": 2.0,
+   "ssr|low": 319.0,
+   "ssr|mid": 101.0,
+   "ssr|very-low": 651.0,
+   "stream|flagship": 9.0,
+   "stream|low": 347.0,
+   "stream|mid": 128.0,
+   "stream|very-low": 686.0
+  },
+  "content_TTFB_by_load": {
+   "csr|high": 1448.0,
+   "csr|idle": 9.0,
+   "csr|low": 9.0,
+   "csr|mid": 390.0,
+   "islands|high": 1659.0,
+   "islands|idle": 15.0,
+   "islands|low": 16.0,
+   "islands|mid": 407.0,
+   "ssg|high": 634.0,
+   "ssg|idle": 23.0,
+   "ssg|low": 28.0,
+   "ssg|mid": 138.0,
+   "ssr|high": 1758.0,
+   "ssr|idle": 14.0,
+   "ssr|low": 15.0,
+   "ssr|mid": 408.0,
+   "stream|high": 1737.0,
+   "stream|idle": 15.0,
+   "stream|low": 16.0,
+   "stream|mid": 385.0
+  }
+ }
+}

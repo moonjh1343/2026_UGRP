@@ -8,14 +8,20 @@ Every plane below is implemented and tracked — SUT, load generator, measuremen
 infrastructure, edge serving plane, training pipeline. All seven stages are done:
 the full-grid collection (`grid-v1`, 20 Fargate shards) ran 2026-08-14 → 08-17 and its data lives
 in S3 + DynamoDB (a local copy is synced to `workers/runs/grid-v1/`, gitignored); the tree the policy
-serves is now the grid-v1 distilled tree (stage 7 ran 2026-08-18); the serving plane (`edge/`) has not
-been rebuilt/redeployed with it yet.
+serves is now the grid-v1 distilled tree (stage 7 ran 2026-08-18); the serving plane (`edge/`) is
+**deployed and serving that tree** (2026-08-23): CloudFront `d3mrinixcwam76.cloudfront.net` →
+ALB `Ugrp-g-Alb16-hg9aaU2GQmxj-425179942.ap-northeast-2.elb.amazonaws.com`. Verified end to end —
+the mode changes with the client bucket (dashboard: `csr` on tier-4/4g, `islands` on tier-1 with
+save-data), crawlers still pin to `ssr`, and the ALB refuses non-CloudFront traffic.
+**It bills ~$3/day while up** (2 Fargate tasks + ALB); tear it down with
+`npx cdk destroy Ugrp-grid-v1-Serving Ugrp-grid-v1-ServingOrigin` — the Lambda@Edge replica
+cleanup lags a few hours, which is normal.
 
 | 단계 | 상태 |
 |---|---|
 | 1–4 골격 · 계측 · 유형 확대 · 결정 계층 | 완료 (`check:dom`·`check:join`·`check:divergence`·`check:policy` 통과) |
 | 5 부하·측정 워커 | 완료 (`verify-variance.mjs` 통과, n=30) |
-| 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — **8/17 23:20 완료(10,400/10,400셀·311,108행)**. 8/17 01:26 72h 태스크 타임아웃으로 FAILED(98.9%)된 뒤 high 샤드 15·18을 `infra/scripts/resume-shards.sh`로 재개해 마쳤다. Shards·Orchestration 스택은 철거, Data·Network만 남음. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
+| 6 factorial 수집 | 본수집 `grid-v1` 2026-08-14 시작(10,400셀·20샤드) — **8/17 23:20 완료(10,400/10,400셀·311,108행)**. 8/17 01:26 72h 태스크 타임아웃으로 FAILED(98.9%)된 뒤 high 샤드 15·18을 `infra/scripts/resume-shards.sh`로 재개해 마쳤다. Shards·Orchestration은 수집 직후, Network는 2026-08-21에 철거 — ap-northeast-2에 Data·CDKToolkit만 남는다(시간당 과금 0). 다음 수집·서빙 전에 `npx cdk deploy Ugrp-grid-v1-Network` 재배포가 선행돼야 한다. 데이터는 S3(`UGRP_RESULTS_BUCKET`)·체크포인트는 DynamoDB. `workers/runs/pilot-low-idle/`·slice-b2는 그 이전 파일럿(SSG 캐시 축은 revalidate no-op 버그로 의심 대상) |
 | 7 학습 파이프라인 | **grid-v1로 학습 완료, 배포 λ=0.3·깊이 12(2026-08-19)** — `policy/model/tree.v0.json` = `trained-20260818T163155Z`(잎 2,724, 687KB, 앙상블 대비 R² 0.999). λ 스윕의 Pareto 무릎이 0.3(서버 절감 86% 확보, λ=1은 정책이 라우트 룩업으로 퇴화)이고, λ<1은 문맥 상호작용 때문에 깊이 5로 부족해 12로 확장(`--distill-depth`). 검증(라우트 홀드아웃 400조건): 앙상블 top-1 74.8%·regret 0.041, 증류 트리 74.2%·0.046, 추론 p95 0.025ms. `check:tree`·`check:policy` 통과. 근거 `training/reports/grid-v1.sweep*.json`·`grid-v1.depth-*.json`, 리포트 `grid-v1-lam0.3-d12.*.json` |
 
 `training/out/` is gitignored; the grid-v1 evaluation is checked in as `training/reports/grid-v1.*.json`.
@@ -138,12 +144,27 @@ gateway in the lab VPC would void the claim that lab measurements have no intern
 ALB accepts only the CloudFront prefix list: a request that reaches the origin directly skips
 the decision layer, and that observation is indistinguishable from a policy-served one
 afterwards. The edge code lives in `03_Project/edge/`. Build its bundle first
-(`cd 03_Project/edge && npm run build -- --origin https://<origin>`; `npm test` runs the
+(`cd 03_Project/edge && npm run build -- --origin http://<ALB DNS>` — **`http://`, not `https://`**:
+the ALB has only a port-80 listener (`serving-origin-stack.ts`), and over `https://` the server-state
+fetch fails silently and every server feature stays 0; `npm test` runs the
 handlers against real CloudFront event shapes). **The cache key is the whole design**: a
 CloudFront Function folds client hints into `x-ugrp-bucket`, that header — and only that
 header — is in the cache key, and the model runs at origin-request so cache hits pay nothing.
 Read `edge/README.md` before touching it; both the bucket scheme and the decision to bake the
 tree into the bundle instead of AppConfig are load-bearing and depart from the proposal.
+
+**Server state is read back through CloudFront, not from the ALB.** The ALB security group admits
+only the CloudFront origin-facing prefix list and Lambda@Edge egress is not in that range, so a
+direct fetch is dropped and every server feature silently stays 0. `origin-request.mjs`'s
+`stateOrigin()` therefore targets `cf.config.distributionDomainName` — taken from the event, because
+baking the distribution domain into the bundle is circular (the stack builds the bundle, the deploy
+creates the domain). `ORIGIN_URL` survives only as the no-distribution fallback.
+
+**`/api/internal/*` must not be reachable on a public distribution.** Those routes are lab
+instrumentation, and `revalidate` flushes the ISR cache on an unauthenticated POST — the cache-hit
+rate this deployment exists to measure. The viewer function 403s the whole prefix except
+`/api/internal/metrics`, which the decision layer itself reads. The ALB health check
+(`/api/internal/routes`) is ALB→target and never crosses the edge.
 
 `training/ugrp_train/config.py` mirrors JS-side tables (`workers/lib/grid.mjs`'s device/network
 conditions, `policy/features.ts`'s feature vector order, `policy/model/*.json`'s mode index) —
@@ -219,6 +240,17 @@ check. The full lists live in the sub-READMEs; these span more than one package:
 - **A floating Promise for the server-state refresh.** Cancelled after the response returns, so the cache stays empty and every server-state feature is 0, forever, without an error. Use `event.waitUntil`.
 - **Calibrating the load level on a short burst.** A fixed VU count pins *concurrency*, not CPU: throughput is `concurrency / (thinkTime + responseTime)`, and response time grows as the SUT saturates, so sustained CPU settles below what a 20-second window measures. Every load level in slice-b2 sat 12–16%p under its calibration. The number lands in `experiment.json`, `features.py` maps it onto every row of that level, and the load axis is then labelled with a CPU the server never had. `calibrateRemote` searches on bursts but records a **sustained** hold — the value the drift verifier compares against during measurement.
 - **CloudFormation does not restore `desiredCount`.** A service scaled to 0 by hand or by the failure Lambda stays at 0 across redeploys whose template didn't change for it; the worker's first `/vus` call then fails and the whole SFN dies in a minute. `start-collection.sh` forces every service to 1 and waits — do not start an execution any other way.
+- **An origin request policy strips the headers Lambda@Edge adds.** This is the one that cost a
+  full deploy to find. `serving-stack.ts` used to allowList only `x-ugrp-bucket`/`user-agent`/`save-data`,
+  on the reasoning that the edge writes its decision onto the request directly and so bypasses the
+  policy. The opposite is true: anything not in the allowList is removed before the origin sees it.
+  `x-render-mode` vanished, so the origin ran **its own** policy instead of applying the edge's
+  (`x-decision-reason` reads `policy`, never `forced`), and the `x-cell-*` headers vanished with it,
+  so the origin's recorded features were constant per route. Every response still looked healthy —
+  200s, a plausible mode, a plausible margin. The tell is that the margin does not move when the
+  client bucket does. The allowList now carries all ten decision headers, and because an allowList
+  also admits a *viewer* sending the same name, `viewer-request.js` deletes them first.
+  **CloudFront caps the policy at 10 headers** — adding one means dropping one.
 - **High-load cells lose samples to "비콘 미도착".** Under `high` load, 10–30 % of reps time out before the beacon lands, so those cells finish with n=21–29 and run ~2× slower than the rest (the high shards are the tail of every collection). It is a Fargate-only effect (0/60 locally); the reason breakdown is in each cell summary and checkpoint. Check the per-load n distribution before training.
 
 ## Reproducibility requirements
@@ -239,7 +271,7 @@ Non-ASCII directory names — quote paths in shell commands.
 - `00_Main/`, `01_연구 계획서/` — proposal submissions (PDF/DOCX)
 - `02_참고 논문/` — reference papers on CSR/SSR performance
 - `99_기타/` — past UGRP award reports, admin documents
-- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (outline), `paper-draft.md` (초안 v0.1, grid-v1 수치 반영)
+- `03_Project/docs/` — `benchmark-app-design.md` (SUT), `project-overview-and-code-guide.md` (map for newcomers), `paper-outline.md` + `references.md` (outline), `paper-draft.md` (초안 v0.2, 전 장 수치 반영), `figures/`(`training/scripts/paper_figures.py`가 grid-v1에서 재생성)
 - `03_Project/apps/benchmark/` — the SUT (see its `README.md` for the internal structure and the traps)
 - `03_Project/apps/benchmark/policy/` — the decision layer. Must not import `app/`, `components/`, or `node:*` — it is destined for Lambda@Edge, and `check:policy` enforces the boundary.
 - `03_Project/load/` — background load. `profile.json` is read by both the k6 deployment script and the local Node generator; keeping one definition is what makes a calibrated VU count portable.

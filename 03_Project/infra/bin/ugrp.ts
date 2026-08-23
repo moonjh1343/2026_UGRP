@@ -148,7 +148,9 @@ if (servingOrigin) {
 } else if (haveAll) {
   console.error(
     `[${prefix}] 서빙 평면을 건너뛴다 — -c ugrp:servingOrigin=<오리진 도메인> 을 주면 만든다.\n` +
-      '  먼저 edge/에서 번들을 빌드해야 한다: cd 03_Project/edge && npm run build -- --origin https://<오리진>',
+      '  먼저 edge/에서 번들을 빌드해야 한다: cd 03_Project/edge && npm run build -- --origin http://<ALB DNS>\n' +
+      '  **https가 아니라 http다** — ALB 리스너는 80뿐이다. 서버 상태는 배포판을 거쳐 읽으므로\n' +
+      '  (origin-request.mjs의 stateOrigin) 이 값은 배포판이 없는 로컬 테스트용 대비책이다.',
   )
 }
 

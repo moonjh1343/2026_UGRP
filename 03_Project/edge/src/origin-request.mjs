@@ -78,8 +78,24 @@ function applyBucket(cf, bucket) {
  */
 const newCid = () => globalThis.crypto.randomUUID()
 
+/**
+ * 서버 상태를 읽어올 곳. **ALB를 직접 치면 안 된다.**
+ *
+ * ALB 보안 그룹은 CloudFront origin-facing 프리픽스 리스트만 받는데(serving-origin-stack.ts),
+ * Lambda@Edge의 이그레스는 그 대역이 아니다. 직접 치면 조용히 막혀 서버 상태 피처가
+ * 영원히 0으로 굳는다 — 예외도 로그도 없이 정책이 부하 축을 못 보는 상태가 된다.
+ * 배포판을 거치면 같은 요청이 CloudFront 대역에서 나가므로 통과한다.
+ *
+ * 도메인은 이벤트가 실어 준다. 번들에 구울 수 없다 — 스택이 번들을 만들고 그 배포가
+ * 도메인을 만드는 순환이라, 구우려면 배포를 두 번 해야 한다. ORIGIN_URL은 배포판이
+ * 없는 로컬 테스트용 대비책으로만 남는다.
+ */
+const stateOrigin = (config) =>
+  config && config.distributionDomainName ? `https://${config.distributionDomainName}` : ORIGIN_URL
+
 export async function handler(event) {
   const cf = event.Records[0].cf.request
+  const cfConfig = event.Records[0].cf.config
 
   const parsed = parsePublicPath(cf.uri)
   const entry = parsed ? lookup(parsed.type, parsed.key) : undefined
@@ -148,7 +164,7 @@ export async function handler(event) {
    * TTFB에 얹혀, 측정하려는 개선폭보다 큰 오염이 된다. Lambda@Edge는 응답 후
    * 실행을 동결했다가 다음 호출에서 해동하므로 이 promise는 이어서 완료된다.
    */
-  scheduleRefresh(ORIGIN_URL)
+  scheduleRefresh(stateOrigin(cfConfig))
 
   return cf
 }

@@ -68,11 +68,82 @@ console.log('\nA. 뷰어 요청 — 캐시 키 버킷')
   check('힌트 결측은 중상(3)으로', r.headers['x-ugrp-bucket'].value.startsWith('3-'), r.headers['x-ugrp-bucket'].value)
 }
 
+console.log('\nA1. 결정 헤더 위조를 막는다')
+{
+  /*
+   * 이 이름들은 오리진 요청 정책의 allowList에 있다(그래야 Lambda@Edge가 얹은 값이
+   * 오리진에 닿는다). allowList는 뷰어가 보낸 같은 이름도 통과시키므로, 뷰어 함수가
+   * 먼저 지우지 않으면 클라이언트가 결정 계층을 우회할 수 있다.
+   */
+  const forged = {
+    'user-agent': 'Mozilla/5.0',
+    'x-render-mode': 'csr',
+    'x-correlation-id': 'forged-cid',
+    'x-decision-reason': 'policy',
+    'x-ugrp-propensity': '1.0',
+    'x-cell-device-tier': '4',
+  }
+  const r = viewerHandler(viewerEvent('/content/content-01', forged))
+  for (const h of Object.keys(forged)) {
+    if (h === 'user-agent') continue
+    check(`${h} 는 제거된다`, r.headers[h] === undefined, String(r.headers[h]?.value))
+  }
+}
+
+console.log('\nA2. 계측 엔드포인트는 공개 배포로 나가지 않는다')
+{
+  // 무인증 POST 한 번으로 ISR 캐시가 비워진다 — 열어두면 측정 대상(캐시 적중률)이 파괴된다.
+  const r = viewerHandler(viewerEvent('/api/internal/revalidate', { 'user-agent': 'Mozilla/5.0' }))
+  check('revalidate는 403', r.statusCode === 403, String(r.statusCode))
+}
+{
+  const r = viewerHandler(viewerEvent('/api/internal/records', { 'user-agent': 'Mozilla/5.0' }))
+  check('records는 403', r.statusCode === 403, String(r.statusCode))
+}
+{
+  // 결정 계층이 서버 상태를 여기서 읽는다. 막으면 부하 피처가 영원히 0이다.
+  const r = viewerHandler(viewerEvent('/api/internal/metrics', { 'user-agent': 'Mozilla/5.0' }))
+  check('metrics는 통과한다', r.statusCode === undefined && Boolean(r.headers))
+}
+{
+  const r = viewerHandler(viewerEvent('/content/content-01', { 'user-agent': 'Mozilla/5.0' }))
+  check('일반 라우트는 통과한다', r.statusCode === undefined && Boolean(r.headers['x-ugrp-bucket']))
+}
+
 // ── Lambda@Edge ────────────────────────────────────────────────────────────
 // Windows 절대 경로는 file:// URL로 바꿔야 ESM 로더가 받는다 ('c:'를 스킴으로 읽는다).
 const { handler } = await import(pathToFileURL(join(HERE, 'dist', 'index.mjs')).href)
-const originEvent = (uri, headers) => ({ Records: [{ cf: { request: { uri, headers: edgeHeaders(headers) } } }] })
+/** 실제 오리진 요청 이벤트에는 config가 함께 온다 — 서버 상태를 읽을 도메인이 여기서 나온다. */
+const DIST = 'd111111abcdef8.cloudfront.net'
+const originEvent = (uri, headers) => ({
+  Records: [
+    {
+      cf: {
+        config: { distributionDomainName: DIST, eventType: 'origin-request' },
+        request: { uri, headers: edgeHeaders(headers) },
+      },
+    },
+  ],
+})
 const val = (r, n) => r.headers[n]?.[0]?.value
+
+console.log('\nB0. 서버 상태는 배포판을 거쳐 읽는다')
+{
+  /*
+   * ALB를 직접 치면 SG(CloudFront 프리픽스 리스트)에 막혀 조용히 실패하고, 서버 상태
+   * 피처가 영원히 0으로 굳는다. 이 검사는 **첫 핸들러 호출이어야 한다** — 스냅샷
+   * 캐시가 모듈 스코프라 뒤에 오면 TTL·진행중 플래그에 걸려 갱신이 예약되지 않는다.
+   */
+  const realFetch = globalThis.fetch
+  let called = null
+  globalThis.fetch = (url) => {
+    called = String(url)
+    return Promise.resolve({ ok: false })
+  }
+  await handler(originEvent('/content/content-01', { 'user-agent': 'Mozilla/5.0', 'x-ugrp-bucket': '4-3-0-0' }))
+  globalThis.fetch = realFetch
+  check('ALB가 아니라 배포 도메인에서 읽는다', called === `https://${DIST}/api/internal/metrics`, String(called))
+}
 
 console.log('\nB. 오리진 요청 — 결정')
 {

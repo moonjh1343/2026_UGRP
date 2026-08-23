@@ -63,6 +63,26 @@ function handler(event) {
   var req = event.request
   var h = req.headers
 
+  /*
+   * 계측 엔드포인트는 공개 배포로 나가지 않는다.
+   *
+   * `/api/internal/*`는 SUT의 일부가 아니라 랩 계측 도구다(각 route.ts가 "실배포로
+   * 나가면 안 된다"고 적어 두었다). 그중 `revalidate`는 **인증 없는 POST 한 번으로
+   * ISR 캐시를 비운다** — 공개 배포에서 열려 있으면 누구나 캐시 적중률을 0으로 만들 수
+   * 있고, 그 적중률이 바로 이 배포가 측정하려는 값이다.
+   *
+   * `metrics`만 통과시킨다. 결정 계층이 서버 상태를 여기서 읽는데(serverState.ts),
+   * 그 요청도 배포판을 거쳐 들어오므로 이 함수를 지나야 한다.
+   *
+   * ALB 헬스체크(`/api/internal/routes`)는 ALB→타깃 직결이라 여기를 지나지 않는다.
+   *
+   * ponytail: metrics는 무인증 공개 — 새는 것은 부하 수치뿐이고 파괴적이지 않다.
+   * 필드 트래픽을 실제로 받기 시작하면 공유 시크릿 헤더 검증으로 올린다.
+   */
+  if (req.uri.indexOf('/api/internal/') === 0 && req.uri !== '/api/internal/metrics') {
+    return { statusCode: 403, statusDescription: 'Forbidden' }
+  }
+
   var ua = h['user-agent'] ? h['user-agent'].value : ''
   var saveData = h['save-data'] && h['save-data'].value === 'on' ? 1 : 0
 
@@ -73,6 +93,27 @@ function handler(event) {
    * 캐시를 오염시키거나, 봇 버킷을 위장해 SEO 고정을 우회할 수 있다.
    */
   req.headers['x-ugrp-bucket'] = { value: bucket }
+
+  /*
+   * 결정 헤더는 **엣지만 쓴다.** 오리진 요청 정책의 allowList에 이 이름들이 들어
+   * 있어야 Lambda@Edge가 얹은 값이 오리진까지 가는데(serving-stack.ts), allowList는
+   * 뷰어가 보낸 같은 이름도 함께 통과시킨다. 여기서 먼저 지우지 않으면 클라이언트가
+   * x-render-mode를 직접 보내 결정 계층을 우회할 수 있고, 그렇게 만들어진 관측은
+   * 정책이 고른 것과 사후에 구분되지 않는다. 조인 키(x-correlation-id)도 마찬가지다 —
+   * 위조되면 데이터셋이 오염된다.
+   */
+  var EDGE_ONLY = [
+    'x-render-mode',
+    'x-policy',
+    'x-decision-reason',
+    'x-decision-margin',
+    'x-policy-us',
+    'x-ugrp-propensity',
+    'x-correlation-id',
+    'x-cell-device-tier',
+    'x-cell-effective-type',
+  ]
+  for (var i = 0; i < EDGE_ONLY.length; i++) delete req.headers[EDGE_ONLY[i]]
 
   return req
 }

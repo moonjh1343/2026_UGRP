@@ -110,20 +110,53 @@ export class ServingStack extends Stack {
     })
 
     /*
-     * 오리진 요청 정책 — **뷰어가 보낸** 헤더 중 오리진에 넘길 것만 고른다.
+     * 오리진 요청 정책 — 오리진에 넘길 헤더 목록.
      *
-     * 캐시 키(cachePolicy)와 별개다. 여기 있는 헤더는 오리진에 전달되지만 캐시를
-     * 가르지 않는다. 결정 헤더(x-render-mode 등)는 여기 넣지 않는다 — 그것들은
-     * Lambda@Edge가 origin-request에서 요청에 직접 얹으므로 정책과 무관하게
-     * 오리진에 도달하고, 여기 넣으면 뷰어가 같은 이름을 보내 결정 계층을 우회한
-     * 관측(구분 불가능한 오염 행)을 만들 수 있다.
+     * **결정 헤더가 여기 들어 있어야 한다.** 원래 주석은 "Lambda@Edge가
+     * origin-request에서 직접 얹으므로 정책과 무관하게 도달한다"고 적었는데,
+     * 실측은 반대였다: 오리진 요청 정책이 붙으면 allowList에 없는 헤더는 Lambda가
+     * 얹은 것까지 오리진 도달 전에 제거된다. 그 결과 x-render-mode가 사라져
+     * 오리진이 엣지 결정을 무시하고 자기 정책을 다시 돌았고(x-decision-reason이
+     * 'forced'가 아니라 'policy'), x-cell-* 조건 헤더까지 함께 사라져 오리진의
+     * 피처가 라우트마다 상수가 됐다 — 엣지는 정상 동작하는데 서빙 결과만 조용히
+     * 달라지는, 이 저장소가 경계하는 바로 그 유형의 실패다.
+     *
+     * 위조 문제는 allowList가 아니라 뷰어 함수가 막는다: viewer-request가 클라이언트가
+     * 보낸 같은 이름의 헤더를 **먼저 지우므로**, 여기 통과하는 값은 항상 엣지가 쓴 것이다.
+     * (x-ugrp-bucket을 덮어쓰는 것과 같은 이유·같은 방법이다.)
      */
     const originRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'ForwardDecision', {
-      comment: 'Forward the viewer hints the edge decision needs to the origin',
+      comment: 'Forward the edge decision and the viewer hints it derived from',
+      /*
+       * **정확히 10개다 — CloudFront의 정책당 헤더 상한이 10이고, 11개면 배포가
+       * ServiceLimitExceeded로 실패한다.** 헤더를 추가하려면 하나를 빼거나
+       * 여러 값을 한 헤더에 묶어야 한다.
+       *
+       * 뺀 것 둘:
+       *   x-ugrp-bucket — 오리진에서 읽는 코드가 없다. 캐시 키는 cachePolicy가 따로
+       *     들고 있으므로 여기서 빠져도 버킷 분리는 그대로다.
+       *   x-policy-us — 엣지 추론 시간. 서버 레코드에서만 null이 되고, 정작 RQ3이
+       *     쓰는 값은 Lambda@Edge의 CloudWatch REPORT와 npm test 쪽이다.
+       *
+       * ponytail: 상한이 다시 걸리면 policy/reason/margin/propensity를 헤더 하나에
+       * 묶어 오리진에서 파싱한다(슬롯 4개 → 1개). 지금은 SUT 이미지까지 함께
+       * 바꿔야 해서 미룬다.
+       */
       headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-        'x-ugrp-bucket',
         'user-agent',
         'save-data',
+        // 엣지 결정 — 오리진의 decide()가 forcedMode로 받아 그대로 적용한다.
+        'x-render-mode',
+        'x-policy',
+        'x-decision-reason',
+        'x-decision-margin',
+        // 오프폴리시 평가가 기대는 값. 없으면 필드 데이터가 편향된 채 남는다.
+        'x-ugrp-propensity',
+        // 결정과 측정을 잇는 조인 키. 끊기면 데이터셋이 통째로 무가치하다.
+        'x-correlation-id',
+        // 버킷을 되돌린 조건 헤더. 빠지면 오리진의 피처가 라우트마다 상수가 된다.
+        'x-cell-device-tier',
+        'x-cell-effective-type',
       ),
       cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
       queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
